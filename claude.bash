@@ -47,6 +47,83 @@ _claude_cleanup_old_cache() {
     done
 }
 
+_claude_parse_flags() {
+    # Parse flags from help output on stdin
+    # Outputs all flag forms (short and long), one per line
+    local line
+    while IFS= read -r line; do
+        # Match lines starting with optional spaces then a dash
+        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*) ]]; then
+            echo "${BASH_REMATCH[1]}"
+            echo "${BASH_REMATCH[2]}"
+        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*) ]]; then
+            echo "${BASH_REMATCH[1]}"
+        fi
+    done
+}
+
+_claude_parse_flags_with_args() {
+    # Parse flags that take arguments (have <value> or [value] after them)
+    local line
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]]+[\<\[] ]]; then
+            echo "${BASH_REMATCH[1]}"
+            echo "${BASH_REMATCH[2]}"
+        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]]+[\<\[] ]]; then
+            echo "${BASH_REMATCH[1]}"
+        fi
+    done
+}
+
+_claude_parse_subcommands() {
+    # Parse subcommand names from help output on stdin
+    # Looks for lines in the "Commands:" section
+    local in_commands=0
+    local line
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^Commands: ]]; then
+            in_commands=1
+            continue
+        fi
+        if [[ $in_commands -eq 1 ]]; then
+            # Empty line or non-indented line ends commands section
+            [[ -z "$line" ]] && continue
+            [[ ! "$line" =~ ^[[:space:]] ]] && break
+            # Extract command name (first word, handle "update|upgrade" aliases)
+            if [[ "$line" =~ ^[[:space:]]+([a-zA-Z][-a-zA-Z]*) ]]; then
+                echo "${BASH_REMATCH[1]}"
+            fi
+        fi
+    done
+}
+
+_claude_build_cache() {
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    mkdir -p "$cache_dir"
+
+    # Parse root level
+    local help_output
+    help_output="$(claude --help 2>/dev/null)"
+    echo "$help_output" | _claude_parse_flags > "$cache_dir/_root_flags"
+    echo "$help_output" | _claude_parse_flags_with_args > "$cache_dir/_root_flags_with_args"
+    echo "$help_output" | _claude_parse_subcommands > "$cache_dir/_root_subcommands"
+
+    # Parse each subcommand
+    local subcmd
+    while IFS= read -r subcmd; do
+        [[ -z "$subcmd" ]] && continue
+        local sub_help
+        sub_help="$(claude "$subcmd" --help 2>/dev/null)" || continue
+        echo "$sub_help" | _claude_parse_flags > "$cache_dir/${subcmd}_flags"
+        echo "$sub_help" | _claude_parse_flags_with_args > "$cache_dir/${subcmd}_flags_with_args"
+        echo "$sub_help" | _claude_parse_subcommands > "$cache_dir/${subcmd}_subcommands"
+    done < "$cache_dir/_root_subcommands"
+
+    # Clean up old versions
+    _claude_cleanup_old_cache
+}
+
 _claude() {
     local cur prev words cword
     _init_completion || return
