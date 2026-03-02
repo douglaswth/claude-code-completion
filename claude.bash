@@ -127,6 +127,55 @@ _claude_build_cache() {
 _claude() {
     local cur prev words cword
     _init_completion || return
+
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+
+    # Build cache if needed
+    if [[ ! -d "$cache_dir" ]]; then
+        _claude_build_cache
+    fi
+
+    # Determine which subcommand we're in (if any)
+    local subcmd=""
+    local i
+    for (( i=1; i < cword; i++ )); do
+        if [[ "${words[i]}" != -* ]]; then
+            local potential="${words[i]}"
+            if [[ -f "$cache_dir/_root_subcommands" ]] && grep -qx "$potential" "$cache_dir/_root_subcommands"; then
+                subcmd="$potential"
+                break
+            fi
+        fi
+    done
+
+    if [[ -n "$subcmd" ]]; then
+        # Inside a subcommand
+        if [[ "$cur" == -* ]]; then
+            # Complete subcommand flags
+            if [[ -f "$cache_dir/${subcmd}_flags" ]]; then
+                COMPREPLY=( $(compgen -W "$(cat "$cache_dir/${subcmd}_flags")" -- "$cur") )
+            fi
+        else
+            # Complete sub-subcommands
+            if [[ -f "$cache_dir/${subcmd}_subcommands" ]]; then
+                COMPREPLY=( $(compgen -W "$(cat "$cache_dir/${subcmd}_subcommands")" -- "$cur") )
+            fi
+        fi
+    else
+        # Top level
+        if [[ "$cur" == -* ]]; then
+            # Complete flags
+            if [[ -f "$cache_dir/_root_flags" ]]; then
+                COMPREPLY=( $(compgen -W "$(cat "$cache_dir/_root_flags")" -- "$cur") )
+            fi
+        else
+            # Complete subcommands
+            if [[ -f "$cache_dir/_root_subcommands" ]]; then
+                COMPREPLY=( $(compgen -W "$(cat "$cache_dir/_root_subcommands")" -- "$cur") )
+            fi
+        fi
+    fi
 }
 
 complete -F _claude claude
