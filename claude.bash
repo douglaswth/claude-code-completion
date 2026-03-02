@@ -105,6 +105,7 @@ _claude_build_cache() {
     # Parse root level
     local help_output
     help_output="$(claude --help 2>/dev/null)"
+    echo "$help_output" > "$cache_dir/_root_help"
     echo "$help_output" | _claude_parse_flags > "$cache_dir/_root_flags"
     echo "$help_output" | _claude_parse_flags_with_args > "$cache_dir/_root_flags_with_args"
     echo "$help_output" | _claude_parse_subcommands > "$cache_dir/_root_subcommands"
@@ -122,6 +123,69 @@ _claude_build_cache() {
 
     # Clean up old versions
     _claude_cleanup_old_cache
+}
+
+# Hardcoded model IDs (update when new models are released)
+_CLAUDE_KNOWN_MODELS=(
+    sonnet opus haiku
+    claude-sonnet-4-5-20250514
+    claude-sonnet-4-6
+    claude-opus-4-5-20250514
+    claude-opus-4-6
+    claude-haiku-4-5-20251001
+)
+
+_claude_complete_flag_arg() {
+    # Complete arguments for flags that take values
+    # $1 = flag name, $2 = current word
+    local flag="$1"
+    local cur="$2"
+
+    case "$flag" in
+        --model)
+            # Merge aliases + hardcoded + help-parsed models
+            local models=("${_CLAUDE_KNOWN_MODELS[@]}")
+            # Add any models from help output (look for model IDs in help text)
+            local cache_dir
+            cache_dir="$(_claude_cache_dir)"
+            if [[ -f "$cache_dir/_root_help" ]]; then
+                while IFS= read -r line; do
+                    if [[ "$line" =~ claude-[a-z]+-[0-9] ]]; then
+                        models+=("${BASH_REMATCH[0]}")
+                    fi
+                done < "$cache_dir/_root_help"
+            fi
+            COMPREPLY=( $(compgen -W "${models[*]}" -- "$cur") )
+            ;;
+        --permission-mode)
+            COMPREPLY=( $(compgen -W "acceptEdits bypassPermissions default dontAsk plan" -- "$cur") )
+            ;;
+        --output-format)
+            COMPREPLY=( $(compgen -W "text json stream-json" -- "$cur") )
+            ;;
+        --input-format)
+            COMPREPLY=( $(compgen -W "text stream-json" -- "$cur") )
+            ;;
+        --effort)
+            COMPREPLY=( $(compgen -W "low medium high" -- "$cur") )
+            ;;
+        --add-dir)
+            # Directory completion only
+            COMPREPLY=( $(compgen -d -- "$cur") )
+            ;;
+        --debug-file|--mcp-config|--settings)
+            # File completion
+            COMPREPLY=( $(compgen -f -- "$cur") )
+            ;;
+        --plugin-dir)
+            # Directory completion
+            COMPREPLY=( $(compgen -d -- "$cur") )
+            ;;
+        *)
+            # Unknown flag arg — default to file completion
+            COMPREPLY=( $(compgen -f -- "$cur") )
+            ;;
+    esac
 }
 
 _claude() {
@@ -148,6 +212,18 @@ _claude() {
             fi
         fi
     done
+
+    # Check if previous word is a flag that takes an argument
+    if [[ "$prev" == -* ]]; then
+        local flags_with_args_file="$cache_dir/_root_flags_with_args"
+        if [[ -n "$subcmd" ]]; then
+            flags_with_args_file="$cache_dir/${subcmd}_flags_with_args"
+        fi
+        if [[ -f "$flags_with_args_file" ]] && grep -qx -- "$prev" "$flags_with_args_file"; then
+            _claude_complete_flag_arg "$prev" "$cur"
+            return
+        fi
+    fi
 
     if [[ -n "$subcmd" ]]; then
         # Inside a subcommand
