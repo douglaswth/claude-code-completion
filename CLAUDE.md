@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Shell completion for the `claude` CLI (Claude Code). Currently provides bash tab-completion; zsh and fish support planned.
+Shell completion for the `claude` CLI (Claude Code). Currently provides bash tab-completion.
 
 ## Architecture
 
