@@ -37,6 +37,23 @@ else
     fail "_claude_ensure_cache creates cache directory"
 fi
 
+# Test: _claude_cleanup_old_cache removes old version directories
+base_dir="$XDG_CACHE_HOME/claude-code-completion/bash"
+mkdir -p "$base_dir/0.9.0" "$base_dir/0.8.0"
+_claude_cleanup_old_cache
+if [[ ! -d "$base_dir/0.9.0" ]] && [[ ! -d "$base_dir/0.8.0" ]]; then
+    pass "_claude_cleanup_old_cache removes old versions"
+else
+    fail "_claude_cleanup_old_cache removes old versions"
+fi
+
+# Test: _claude_cleanup_old_cache preserves current version directory
+if [[ -d "$cache_dir" ]]; then
+    pass "_claude_cleanup_old_cache preserves current version"
+else
+    fail "_claude_cleanup_old_cache preserves current version"
+fi
+
 if [[ $FAILURES -gt 0 ]]; then
     echo "$FAILURES test(s) failed"
     exit 1
