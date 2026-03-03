@@ -164,6 +164,46 @@ _claude_session_message() {
     fi
 }
 
+_claude_format_descriptions() {
+    # Format completion candidates with aligned descriptions (Cobra/kubectl pattern).
+    # Takes array name containing "value\tdescription" entries.
+    # When displayed, bash shows "value    (description)" but only inserts the
+    # common prefix of all values (i.e., the descriptions are never inserted).
+    local -n arr="$1"
+    local tab=$'\t'
+    local longest=0
+
+    for entry in "${arr[@]}"; do
+        local val="${entry%%$tab*}"
+        (( ${#val} > longest )) && longest=${#val}
+    done
+
+    COMPREPLY=()
+    for entry in "${arr[@]}"; do
+        local comp desc
+        if [[ "$entry" == *$tab* ]]; then
+            desc="${entry#*$tab}"
+            comp="${entry%%$tab*}"
+            local maxdesc=$(( ${COLUMNS:-80} - longest - 4 ))
+            if (( maxdesc > 8 )); then
+                printf -v comp "%-${longest}s" "$comp"
+            fi
+            if (( maxdesc > 0 )); then
+                (( ${#desc} > maxdesc )) && desc="${desc:0:$((maxdesc-1))}…"
+                comp+="  ($desc)"
+            fi
+        else
+            comp="$entry"
+        fi
+        COMPREPLY+=("$comp")
+    done
+
+    # Preserve display order on bash 4.4+
+    if [[ ${BASH_VERSINFO[0]} -ge 5 || (${BASH_VERSINFO[0]} -eq 4 && ${BASH_VERSINFO[1]} -ge 4) ]]; then
+        compopt -o nosort 2>/dev/null || true
+    fi
+}
+
 _claude_complete_sessions() {
     local cur="$1"
     local encoded_cwd
@@ -181,17 +221,35 @@ _claude_complete_sessions() {
         | head -z -n 10 \
         | cut -z -f2-)
 
-    local session_ids=()
+    local tab=$'\t'
+    local candidates=()
     for file in "${files[@]}"; do
         local basename="${file##*/}"
         local session_id="${basename%.jsonl}"
-        # Filter by current word
         if [[ "$session_id" == "$cur"* ]]; then
-            session_ids+=("$session_id")
+            local msg
+            msg="$(_claude_session_message "$file")"
+            if [[ -n "$msg" ]]; then
+                candidates+=("${session_id}${tab}${msg}")
+            else
+                candidates+=("$session_id")
+            fi
         fi
     done
 
-    COMPREPLY=("${session_ids[@]}")
+    if (( ${#candidates[@]} == 0 )); then
+        return
+    elif (( ${#candidates[@]} == 1 )) || [[ ${COMP_TYPE:-9} == @(37|42) ]]; then
+        # Single match or menu-complete: strip description so it inserts cleanly
+        COMPREPLY=()
+        local c
+        for c in "${candidates[@]}"; do
+            COMPREPLY+=("${c%%$tab*}")
+        done
+    else
+        # Multiple matches: format with aligned descriptions
+        _claude_format_descriptions candidates
+    fi
 }
 
 # Hardcoded model IDs (update when new models are released)
