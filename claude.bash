@@ -125,6 +125,75 @@ _claude_build_cache() {
     _claude_cleanup_old_cache
 }
 
+_claude_encoded_cwd() {
+    # Encode current directory the way Claude does: replace / with -
+    local cwd="${PWD}"
+    echo "${cwd//\//-}"
+}
+
+_claude_session_message_jq() {
+    # Extract first real user message using jq
+    local file="$1"
+    jq -r '
+        select(.type == "user")
+        | .message.content
+        | if type == "array" then
+            .[] | select(.type == "text") | .text
+          elif type == "string" then .
+          else empty
+          end
+    ' "$file" 2>/dev/null | grep -v '<ide_\|<command-' | head -1
+}
+
+_claude_session_message_grep() {
+    # Extract first real user message using grep/sed fallback
+    local file="$1"
+    grep '"type":"user"' "$file" \
+        | grep -v '<ide_' \
+        | grep -v '<command-' \
+        | head -1 \
+        | sed -n 's/.*"text":"\([^"]*\)".*/\1/p' \
+        | head -1
+}
+
+_claude_session_message() {
+    if command -v jq &>/dev/null; then
+        _claude_session_message_jq "$1"
+    else
+        _claude_session_message_grep "$1"
+    fi
+}
+
+_claude_complete_sessions() {
+    local cur="$1"
+    local encoded_cwd
+    encoded_cwd="$(_claude_encoded_cwd)"
+    local session_dir="$HOME/.claude/projects/${encoded_cwd}"
+
+    [[ -d "$session_dir" ]] || return
+
+    # List JSONL files sorted by modification time (newest first), limit to 10
+    local files=()
+    while IFS= read -r -d '' file; do
+        files+=("$file")
+    done < <(find "$session_dir" -maxdepth 1 -name '*.jsonl' -printf '%T@\t%p\0' \
+        | sort -z -t$'\t' -k1 -rn \
+        | head -z -n 10 \
+        | cut -z -f2-)
+
+    local session_ids=()
+    for file in "${files[@]}"; do
+        local basename="${file##*/}"
+        local session_id="${basename%.jsonl}"
+        # Filter by current word
+        if [[ "$session_id" == "$cur"* ]]; then
+            session_ids+=("$session_id")
+        fi
+    done
+
+    COMPREPLY=("${session_ids[@]}")
+}
+
 # Hardcoded model IDs (update when new models are released)
 _CLAUDE_KNOWN_MODELS=(
     sonnet opus haiku
@@ -168,6 +237,9 @@ _claude_complete_flag_arg() {
             ;;
         --effort)
             COMPREPLY=( $(compgen -W "low medium high" -- "$cur") )
+            ;;
+        --resume|-r)
+            _claude_complete_sessions "$cur"
             ;;
         --add-dir)
             # Directory completion only
