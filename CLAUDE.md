@@ -11,7 +11,7 @@ Shell completion for the `claude` CLI (Claude Code). Currently provides bash tab
 Single-file bash completion script (`claude.bash`) with:
 - Dynamic help parsing — extracts flags and subcommands from `claude --help` at completion time
 - Version-based caching at `$XDG_CACHE_HOME/claude-code-completion/bash/<version>/`
-- Smart completions for flag arguments (models, permission modes, session IDs, etc.)
+- Smart completions for flag arguments (models, permission modes, session IDs with message previews, etc.)
 - MCP server and plugin name completion for relevant subcommands
 - Optional `jq` dependency for session JSONL parsing, with grep/sed fallback
 
