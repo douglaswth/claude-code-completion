@@ -9,7 +9,7 @@ pass() { echo "PASS: $1"; }
 
 # Use temp dir for XDG cache during tests
 export XDG_CACHE_HOME="$(mktemp -d)"
-trap "rm -rf $XDG_CACHE_HOME" EXIT
+trap 'rm -rf "$XDG_CACHE_HOME"' EXIT
 
 source "$SCRIPT_DIR/../claude.bash"
 

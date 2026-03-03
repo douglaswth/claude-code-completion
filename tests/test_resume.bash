@@ -10,7 +10,7 @@ pass() { echo "PASS: $1"; }
 export XDG_CACHE_HOME="$(mktemp -d)"
 MOCK_BIN="$(mktemp -d)"
 MOCK_HOME="$(mktemp -d)"
-trap "rm -rf $XDG_CACHE_HOME $MOCK_BIN $MOCK_HOME" EXIT
+trap 'rm -rf "$XDG_CACHE_HOME" "$MOCK_BIN" "$MOCK_HOME"' EXIT
 
 # Create mock claude
 cat > "$MOCK_BIN/claude" << 'MOCK'
