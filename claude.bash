@@ -167,7 +167,7 @@ _claude_session_message() {
 _claude_format_descriptions() {
     # Format completion candidates with aligned descriptions (Cobra/kubectl pattern).
     # Takes array name containing "value\tdescription" entries.
-    # When displayed, bash shows "value    (description)" but only inserts the
+    # When displayed, bash shows "value    # description" but only inserts the
     # common prefix of all values (i.e., the descriptions are never inserted).
     local -n arr="$1"
     local tab=$'\t'
@@ -190,7 +190,7 @@ _claude_format_descriptions() {
             fi
             if (( maxdesc > 0 )); then
                 (( ${#desc} > maxdesc )) && desc="${desc:0:$((maxdesc-1))}…"
-                comp+="  ($desc)"
+                comp+="  # $desc"
             fi
         else
             comp="$entry"
@@ -229,11 +229,7 @@ _claude_complete_sessions() {
         if [[ "$session_id" == "$cur"* ]]; then
             local msg
             msg="$(_claude_session_message "$file")"
-            if [[ -n "$msg" ]]; then
-                candidates+=("${session_id}${tab}${msg}")
-            else
-                candidates+=("$session_id")
-            fi
+            candidates+=("${session_id}${tab}${msg:-(session)}")
         fi
     done
 
