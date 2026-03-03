@@ -260,6 +260,40 @@ _claude_complete_flag_arg() {
     esac
 }
 
+_claude_mcp_server_names() {
+    # Extract server names from "claude mcp list" output
+    # Format: "name: url - status" — extract the first word before the colon
+    claude mcp list 2>/dev/null | grep ':' | grep -v '^Checking\|^$' | sed 's/:.*//' | sed 's/^[[:space:]]*//'
+}
+
+_claude_plugin_names() {
+    # Extract plugin names from "claude plugin list --json" output
+    if command -v jq &>/dev/null; then
+        claude plugin list --json 2>/dev/null | jq -r '.[].name' 2>/dev/null
+    else
+        claude plugin list --json 2>/dev/null | grep -o '"name":"[^"]*"' | sed 's/"name":"//;s/"//'
+    fi
+}
+
+_claude_complete_subcmd_arg() {
+    local subcmd="$1"
+    local sub_subcmd="$2"
+    local cur="$3"
+
+    case "${subcmd}/${sub_subcmd}" in
+        mcp/get|mcp/remove)
+            local names
+            names="$(_claude_mcp_server_names)"
+            COMPREPLY=( $(compgen -W "$names" -- "$cur") )
+            ;;
+        plugin/disable|plugin/enable|plugin/uninstall|plugin/remove)
+            local names
+            names="$(_claude_plugin_names)"
+            COMPREPLY=( $(compgen -W "$names" -- "$cur") )
+            ;;
+    esac
+}
+
 _claude() {
     local cur prev words cword
     _init_completion || return
@@ -298,14 +332,26 @@ _claude() {
     fi
 
     if [[ -n "$subcmd" ]]; then
-        # Inside a subcommand
+        # Find sub-subcommand if present
+        local sub_subcmd=""
+        for (( i=i+1; i < cword; i++ )); do
+            if [[ "${words[i]}" != -* ]]; then
+                local potential="${words[i]}"
+                if [[ -f "$cache_dir/${subcmd}_subcommands" ]] && grep -qx "$potential" "$cache_dir/${subcmd}_subcommands"; then
+                    sub_subcmd="$potential"
+                    break
+                fi
+            fi
+        done
+
         if [[ "$cur" == -* ]]; then
-            # Complete subcommand flags
             if [[ -f "$cache_dir/${subcmd}_flags" ]]; then
                 COMPREPLY=( $(compgen -W "$(cat "$cache_dir/${subcmd}_flags")" -- "$cur") )
             fi
+        elif [[ -n "$sub_subcmd" ]]; then
+            # Complete positional args for sub-subcommands
+            _claude_complete_subcmd_arg "$subcmd" "$sub_subcmd" "$cur"
         else
-            # Complete sub-subcommands
             if [[ -f "$cache_dir/${subcmd}_subcommands" ]]; then
                 COMPREPLY=( $(compgen -W "$(cat "$cache_dir/${subcmd}_subcommands")" -- "$cur") )
             fi
