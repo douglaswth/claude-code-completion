@@ -50,14 +50,21 @@ claude mcp get <TAB>   # configured MCP server names
 
 ## Testing
 
-Tests are plain bash scripts in `tests/`:
+Tests use [bashunit](https://bashunit.typeddevs.com/) in `tests/`:
 
 ```bash
 # Run all tests
-for t in tests/test_*.bash; do bash "$t"; done
+bashunit tests/
 
-# Run a single test
-bash tests/test_completion.bash
+# Run a single test file
+bashunit tests/completion_test.bash
+
+# Run with coverage
+bashunit tests/ --coverage --coverage-paths claude.bash
 ```
 
-Tests use mock `claude` commands to avoid requiring a real installation.
+Tests use mock `claude` commands to avoid requiring a real installation. Shared test infrastructure lives in `tests/bootstrap.bash`.
+
+### Prerequisites
+
+- [bashunit](https://bashunit.typeddevs.com/installation)

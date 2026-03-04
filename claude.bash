@@ -213,13 +213,13 @@ _claude_complete_sessions() {
     [[ -d "$session_dir" ]] || return
 
     # List JSONL files sorted by modification time (newest first), limit to 10
+    # Uses ls -1t for portability (GNU find -printf / head -z / cut -z are not
+    # available on macOS).  Session filenames are UUIDs so globbing is safe.
     local files=()
-    while IFS= read -r -d '' file; do
-        files+=("$file")
-    done < <(find "$session_dir" -maxdepth 1 -name '*.jsonl' -printf '%T@\t%p\0' \
-        | sort -z -t$'\t' -k1 -rn \
-        | head -z -n 10 \
-        | cut -z -f2-)
+    local _f
+    while IFS= read -r _f; do
+        files+=("$_f")
+    done < <(ls -1t "$session_dir"/*.jsonl 2>/dev/null | head -n 10)
 
     local tab=$'\t'
     local candidates=()

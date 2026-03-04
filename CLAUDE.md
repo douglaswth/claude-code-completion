@@ -17,17 +17,38 @@ Single-file bash completion script (`claude.bash`) with:
 
 ## Testing
 
-Tests are plain bash scripts in `tests/`:
+Tests use [bashunit](https://bashunit.typeddevs.com/) in `tests/`:
 
 ```bash
 # Run all tests
-for t in tests/test_*.bash; do bash "$t"; done
+bashunit tests/
 
-# Run a single test
-bash tests/test_completion.bash
+# Run a single test file
+bashunit tests/completion_test.bash
+
+# Run with coverage
+bashunit tests/ --coverage --coverage-paths claude.bash
 ```
 
-Tests use mock `claude` commands to avoid requiring a real installation.
+Tests use mock `claude` commands to avoid requiring a real installation. Shared test infrastructure lives in `tests/bootstrap.bash`.
+
+### Coverage Review
+
+After adding or changing tests, run coverage and walk through each uncovered area one at a time with the user. For each area, show the uncovered line(s) marked with `✗` in context of the surrounding source code, explain why it's uncovered, and categorize it:
+
+- **False negative** — coverage instrumentation artifact (e.g., `done < file` redirects, string contents passed to other programs, file-scope declarations)
+- **Worth testing** — real uncovered logic that should have a test; add to a todo list
+- **Skip** — trivial or defensive code not worth the test complexity
+
+Wait for the user's input on each area before moving to the next.
+
+### Prerequisites
+
+- [bashunit](https://bashunit.typeddevs.com/installation)
+
+## Documentation
+
+When making changes that affect usage, testing, or installation instructions, update both `CLAUDE.md` and `README.md` to keep them in sync.
 
 ## Design Documents
 
