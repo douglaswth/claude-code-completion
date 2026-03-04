@@ -67,4 +67,4 @@ Tests use mock `claude` commands to avoid requiring a real installation. Shared 
 
 ### Prerequisites
 
-- [bashunit](https://bashunit.typeddevs.com/installation) (`brew install bashunit`)
+- [bashunit](https://bashunit.typeddevs.com/installation)
