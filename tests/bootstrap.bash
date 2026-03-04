@@ -74,5 +74,39 @@ source_claude_bash() {
     source "$PROJECT_ROOT/claude.bash"
 }
 
+# Fix bashunit's assert_file_contains/assert_file_not_contains:
+# upstream passes the search string directly to grep, which misinterprets
+# patterns starting with dashes (e.g. "--model") as grep options.
+# Adding "--" separates options from the pattern argument.
+assert_file_contains() {
+    bashunit::assert::should_skip && return 0
+    local file="$1"
+    local string="$2"
+    if ! grep -F -q -- "$string" "$file"; then
+        local test_fn label
+        test_fn="$(bashunit::helper::find_test_function_name)"
+        label="$(bashunit::helper::normalize_test_function_name "$test_fn")"
+        bashunit::assert::mark_failed
+        bashunit::console_results::print_failed_test "${label}" "${file}" "to contain" "${string}"
+        return
+    fi
+    bashunit::state::add_assertions_passed
+}
+
+assert_file_not_contains() {
+    bashunit::assert::should_skip && return 0
+    local file="$1"
+    local string="$2"
+    if grep -F -q -- "$string" "$file"; then
+        local test_fn label
+        test_fn="$(bashunit::helper::find_test_function_name)"
+        label="$(bashunit::helper::normalize_test_function_name "$test_fn")"
+        bashunit::assert::mark_failed
+        bashunit::console_results::print_failed_test "${label}" "${file}" "to not contain" "${string}"
+        return
+    fi
+    bashunit::state::add_assertions_passed
+}
+
 export SCRIPT_DIR PROJECT_ROOT
 export -f create_mock_claude write_mock_claude simulate_completion source_claude_bash
