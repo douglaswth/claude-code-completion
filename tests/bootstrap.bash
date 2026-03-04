@@ -40,15 +40,13 @@ MOCK
     chmod +x "$mock_bin/claude"
 }
 
-# Replace the mock claude with a custom script body.
-# Usage: write_mock_claude "$MOCK_BIN" "$(cat <<'BODY' ... BODY)"
+# Replace the mock claude with a custom script body read from stdin.
+# Usage: write_mock_claude "$MOCK_BIN" <<'MOCK'
+#   case "$*" in ...
+# MOCK
 write_mock_claude() {
     local mock_bin="$1"
-    local body="$2"
-    cat > "$mock_bin/claude" << MOCK
-#!/usr/bin/env bash
-$body
-MOCK
+    { echo '#!/usr/bin/env bash'; cat; } > "$mock_bin/claude"
     chmod +x "$mock_bin/claude"
 }
 

@@ -36,6 +36,10 @@ Tests use mock `claude` commands to avoid requiring a real installation. Shared 
 
 - [bashunit](https://bashunit.typeddevs.com/installation) (`brew install bashunit`)
 
+## Documentation
+
+When making changes that affect usage, testing, or installation instructions, update both `CLAUDE.md` and `README.md` to keep them in sync.
+
 ## Design Documents
 
 - `docs/plans/2026-03-02-bash-completion-design.md` — design decisions and rationale
