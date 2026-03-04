@@ -32,6 +32,16 @@ bashunit tests/ --coverage --coverage-paths claude.bash
 
 Tests use mock `claude` commands to avoid requiring a real installation. Shared test infrastructure lives in `tests/bootstrap.bash`.
 
+### Coverage Review
+
+After adding or changing tests, run coverage and walk through each uncovered area one at a time with the user. For each area, show the uncovered line(s) marked with `✗` in context of the surrounding source code, explain why it's uncovered, and categorize it:
+
+- **False negative** — coverage instrumentation artifact (e.g., `done < file` redirects, string contents passed to other programs, file-scope declarations)
+- **Worth testing** — real uncovered logic that should have a test; add to a todo list
+- **Skip** — trivial or defensive code not worth the test complexity
+
+Wait for the user's input on each area before moving to the next.
+
 ### Prerequisites
 
 - [bashunit](https://bashunit.typeddevs.com/installation)

@@ -26,6 +26,7 @@ Usage: claude mcp [options] [command]
 
 Options:
   -h, --help                                     Display help
+  -s, --scope <scope>                            Scope for server
 
 Commands:
   get <name>                                     Get server
@@ -64,12 +65,15 @@ esac
 BODY
 )"
 
+    COMP_DIR="$(mktemp -d)"
+    touch "$COMP_DIR/config.json"
+
     export PATH="$MOCK_BIN:$PATH"
     source_claude_bash
 }
 
 function tear_down_after_script() {
-    rm -rf "$XDG_CACHE_HOME" "$MOCK_BIN"
+    rm -rf "$XDG_CACHE_HOME" "$MOCK_BIN" "$COMP_DIR"
 }
 
 function test_mcp_get_completes_server_names() {
@@ -102,4 +106,17 @@ function test_plugin_uninstall_completes_plugin_names() {
     local result
     result="$(simulate_completion "claude plugin uninstall ")"
     assert_contains "superpowers" "$result"
+}
+
+function test_subcommand_flag_with_args_completes() {
+    local result
+    result="$(simulate_completion "claude mcp add --scope $COMP_DIR/")"
+    assert_contains "config.json" "$result"
+}
+
+function test_subcommand_dash_shows_subcommand_flags() {
+    local result
+    result="$(simulate_completion "claude mcp -")"
+    assert_contains "--help" "$result"
+    assert_contains "--scope" "$result"
 }

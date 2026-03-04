@@ -14,11 +14,13 @@ Usage: claude [options] [command] [prompt]
 Options:
   --add-dir <directories...>     Additional directories
   -c, --continue                 Continue most recent conversation
+  --debug-file <file>            Debug output file
   --effort <level>               Effort level (low, medium, high)
   --input-format <format>        Input format (choices: "text", "stream-json")
   --model <model>                Model for session
   --output-format <format>       Output format (choices: "text", "json", "stream-json")
   --permission-mode <mode>       Permission mode (choices: "acceptEdits", "bypassPermissions", "default", "dontAsk", "plan")
+  --plugin-dir <directory>       Plugin directory
   -p, --print                    Print response and exit
   -r, --resume [value]           Resume a conversation
   -h, --help                     Display help
@@ -35,12 +37,17 @@ esac
 BODY
 )"
 
+    # Create a temp directory with known files and subdirs for completion tests
+    COMP_DIR="$(mktemp -d)"
+    mkdir -p "$COMP_DIR/subdir_one" "$COMP_DIR/subdir_two"
+    touch "$COMP_DIR/file_alpha.txt" "$COMP_DIR/file_beta.log"
+
     export PATH="$MOCK_BIN:$PATH"
     source_claude_bash
 }
 
 function tear_down_after_script() {
-    rm -rf "$XDG_CACHE_HOME" "$MOCK_BIN"
+    rm -rf "$XDG_CACHE_HOME" "$MOCK_BIN" "$COMP_DIR"
 }
 
 function test_model_completes_aliases() {
@@ -86,4 +93,27 @@ function test_model_partial_input_filters() {
     result="$(simulate_completion "claude --model so")"
     assert_contains "sonnet" "$result"
     assert_not_contains "opus" "$result"
+}
+
+function test_add_dir_completes_directories() {
+    local result
+    result="$(simulate_completion "claude --add-dir $COMP_DIR/")"
+    assert_contains "subdir_one" "$result"
+    assert_contains "subdir_two" "$result"
+    assert_not_contains "file_alpha" "$result"
+}
+
+function test_debug_file_completes_files() {
+    local result
+    result="$(simulate_completion "claude --debug-file $COMP_DIR/")"
+    assert_contains "file_alpha.txt" "$result"
+    assert_contains "file_beta.log" "$result"
+}
+
+function test_plugin_dir_completes_directories() {
+    local result
+    result="$(simulate_completion "claude --plugin-dir $COMP_DIR/")"
+    assert_contains "subdir_one" "$result"
+    assert_contains "subdir_two" "$result"
+    assert_not_contains "file_alpha" "$result"
 }

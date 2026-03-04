@@ -33,10 +33,34 @@ SESSION
 
     # Override _claude_encoded_cwd to match our fake project
     eval '_claude_encoded_cwd() { echo "-home-user-myproject"; }'
+
+    # Build a PATH with jq removed for fallback tests
+    SHADOW_BASE="$(mktemp -d)"
+    NO_JQ_PATH=""
+    local _shadow_idx=0
+    local _path_dirs _dir _shadow _f _name
+    IFS=':' read -ra _path_dirs <<< "$PATH"
+    for _dir in "${_path_dirs[@]}"; do
+        [[ -z "$_dir" ]] && continue
+        if [[ -x "$_dir/jq" ]]; then
+            _shadow="$SHADOW_BASE/s${_shadow_idx}"
+            _shadow_idx=$((_shadow_idx + 1))
+            mkdir -p "$_shadow"
+            for _f in "$_dir"/*; do
+                [[ -e "$_f" ]] || continue
+                _name="${_f##*/}"
+                [[ "$_name" == "jq" ]] && continue
+                ln -sf "$_f" "$_shadow/$_name" 2>/dev/null || true
+            done
+            NO_JQ_PATH="${NO_JQ_PATH:+$NO_JQ_PATH:}$_shadow"
+        else
+            NO_JQ_PATH="${NO_JQ_PATH:+$NO_JQ_PATH:}$_dir"
+        fi
+    done
 }
 
 function tear_down_after_script() {
-    rm -rf "$XDG_CACHE_HOME" "$MOCK_BIN" "$MOCK_HOME"
+    rm -rf "$XDG_CACHE_HOME" "$MOCK_BIN" "$MOCK_HOME" "$SHADOW_BASE"
 }
 
 function test_complete_sessions_finds_both_sessions() {
@@ -63,4 +87,30 @@ function test_partial_uuid_filters() {
     COMPREPLY=()
     _claude_complete_sessions "aaa"
     assert_equals "1" "${#COMPREPLY[@]}"
+}
+
+# --- End-to-end tests via simulate_completion ---
+
+function test_e2e_resume_shows_sessions() {
+    local result
+    result="$(simulate_completion "claude --resume ")"
+    assert_contains "aaaaaaaa-1111-1111-1111-111111111111" "$result"
+    assert_contains "bbbbbbbb-2222-2222-2222-222222222222" "$result"
+}
+
+function test_e2e_resume_no_jq_shows_sessions() {
+    if ! command -v jq &>/dev/null; then skip; return; fi
+    local OLD_PATH="$PATH"
+    PATH="$NO_JQ_PATH"
+    local result
+    result="$(simulate_completion "claude --resume ")"
+    PATH="$OLD_PATH"
+    assert_contains "aaaaaaaa-1111-1111-1111-111111111111" "$result"
+    assert_contains "bbbbbbbb-2222-2222-2222-222222222222" "$result"
+}
+
+function test_e2e_resume_no_match_returns_empty() {
+    local result
+    result="$(simulate_completion "claude --resume zzz")"
+    assert_empty "$result"
 }
