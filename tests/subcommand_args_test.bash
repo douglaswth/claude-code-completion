@@ -4,7 +4,7 @@ function set_up_before_script() {
     MOCK_BIN="$(mktemp -d)"
     export XDG_CACHE_HOME="$(mktemp -d)"
 
-    write_mock_claude "$MOCK_BIN" <<'MOCK'
+    write_mock_claude "$MOCK_BIN" "$(cat <<'BODY'
 case "$*" in
     "--version") echo "1.0.0 (Claude Code)" ;;
     "--help")
@@ -61,7 +61,8 @@ OUTPUT
 OUTPUT
         ;;
 esac
-MOCK
+BODY
+)"
 
     export PATH="$MOCK_BIN:$PATH"
     source_claude_bash
