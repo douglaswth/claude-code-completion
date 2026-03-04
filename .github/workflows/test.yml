@@ -11,6 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Use Homebrew bash (macOS)
+        if: runner.os == 'macOS'
+        run: echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+
       - name: Install bashunit
         run: curl -s https://bashunit.typeddevs.com/install.sh | bash
 
