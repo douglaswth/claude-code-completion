@@ -17,10 +17,13 @@ Options:
   --output-format <format>       Output format (choices: "text", "json", "stream-json")
   --permission-mode <mode>       Permission mode
   --plugin-dir <directory>       Plugin directory
+  --settings <file>              Settings file
   -p, --print                    Print response and exit
   -r, --resume [value]           Resume a conversation
   -h, --help                     Display help
   -v, --version                  Output the version number
+
+  Defaults to 'claude-test-9-99').
 
 Commands:
   auth                           Manage authentication
@@ -72,6 +75,12 @@ Describe 'Flag argument completion' {
         $results = Get-CompletionText 'claude --input-format '
         $results | Should -Contain 'text'
         $results | Should -Contain 'stream-json'
+    }
+
+    It 'extracts model IDs from help text without trailing punctuation' {
+        $results = Get-CompletionText 'claude --model '
+        $results | Should -Contain 'claude-test-9-99'
+        $results | Should -Not -Contain "claude-test-9-99')."
     }
 
     It 'filters model completions by partial input' {

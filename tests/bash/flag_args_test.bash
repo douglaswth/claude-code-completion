@@ -23,8 +23,11 @@ Options:
   --plugin-dir <directory>       Plugin directory
   -p, --print                    Print response and exit
   -r, --resume [value]           Resume a conversation
+  --settings <file>               Settings file
   -h, --help                     Display help
   -v, --version                  Output the version number
+
+  Defaults to 'claude-test-9-99').
 
 Commands:
   auth                           Manage authentication
@@ -86,6 +89,13 @@ function test_input_format_completes_choices() {
     result="$(simulate_completion "claude --input-format ")"
     assert_contains "text" "$result"
     assert_contains "stream-json" "$result"
+}
+
+function test_model_extracts_ids_from_help_without_trailing_punctuation() {
+    local result
+    result="$(simulate_completion "claude --model ")"
+    assert_contains "claude-test-9-99" "$result"
+    assert_not_contains "claude-test-9-99')" "$result"
 }
 
 function test_model_partial_input_filters() {
