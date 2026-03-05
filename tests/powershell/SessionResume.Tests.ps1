@@ -10,7 +10,7 @@ BeforeAll {
     $script:OriginalHome = $HOME
     $env:HOME = $script:MockHome
 
-    $projDir = Join-Path $script:MockHome '.claude' 'projects' '-home-user-myproject'
+    $projDir = Join-Path (Join-Path (Join-Path $script:MockHome '.claude') 'projects') '-home-user-myproject'
     New-Item -ItemType Directory -Path $projDir -Force | Out-Null
 
     # Session 1: older
@@ -45,13 +45,13 @@ AfterAll {
 
 Describe 'Session message extraction' {
     It 'extracts simple user message' {
-        $projDir = Join-Path $script:MockHome '.claude' 'projects' '-home-user-myproject'
+        $projDir = Join-Path (Join-Path (Join-Path $script:MockHome '.claude') 'projects') '-home-user-myproject'
         $msg = _claude_session_message -FilePath (Join-Path $projDir 'aaaaaaaa-1111-1111-1111-111111111111.jsonl')
         $msg | Should -Be 'Fix the login bug'
     }
 
     It 'skips IDE metadata messages' {
-        $projDir = Join-Path $script:MockHome '.claude' 'projects' '-home-user-myproject'
+        $projDir = Join-Path (Join-Path (Join-Path $script:MockHome '.claude') 'projects') '-home-user-myproject'
         $msg = _claude_session_message -FilePath (Join-Path $projDir 'bbbbbbbb-2222-2222-2222-222222222222.jsonl')
         $msg | Should -Be 'Add the new feature'
     }

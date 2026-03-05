@@ -51,7 +51,7 @@ Describe 'Cache management' {
     Context '_claude_cleanup_old_cache' {
         It 'removes old version directories' {
             _claude_ensure_cache
-            $baseDir = Join-Path $script:TestCacheDir 'claude-code-completion' 'powershell'
+            $baseDir = Join-Path (Join-Path $script:TestCacheDir 'claude-code-completion') 'powershell'
             New-Item -ItemType Directory -Path (Join-Path $baseDir '0.9.0') -Force | Out-Null
             New-Item -ItemType Directory -Path (Join-Path $baseDir '0.8.0') -Force | Out-Null
 
@@ -64,7 +64,7 @@ Describe 'Cache management' {
         It 'preserves the current version directory' {
             _claude_ensure_cache
             $dir = _claude_cache_dir
-            $baseDir = Join-Path $script:TestCacheDir 'claude-code-completion' 'powershell'
+            $baseDir = Join-Path (Join-Path $script:TestCacheDir 'claude-code-completion') 'powershell'
             New-Item -ItemType Directory -Path (Join-Path $baseDir '0.9.0') -Force | Out-Null
 
             _claude_cleanup_old_cache

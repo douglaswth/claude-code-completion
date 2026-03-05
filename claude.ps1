@@ -21,7 +21,7 @@ function global:_claude_cache_base {
 function global:_claude_cache_dir {
     $version = _claude_version
     $base = _claude_cache_base
-    Join-Path $base 'claude-code-completion' 'powershell' $version
+    Join-Path (Join-Path (Join-Path $base 'claude-code-completion') 'powershell') $version
 }
 
 function global:_claude_ensure_cache {
@@ -32,7 +32,7 @@ function global:_claude_ensure_cache {
 }
 
 function global:_claude_cleanup_old_cache {
-    $baseDir = Join-Path (_claude_cache_base) 'claude-code-completion' 'powershell'
+    $baseDir = Join-Path (Join-Path (_claude_cache_base) 'claude-code-completion') 'powershell'
 
     if (-not (Test-Path $baseDir)) { return }
 
@@ -234,7 +234,7 @@ function global:_claude_complete_sessions {
     $encodedCwd = _claude_encoded_cwd
     # $env:HOME is checked first for testability ($HOME is immutable after startup)
     $homeDir = if ($env:HOME) { $env:HOME } else { $HOME }
-    $sessionDir = Join-Path $homeDir '.claude' 'projects' $encodedCwd
+    $sessionDir = Join-Path (Join-Path (Join-Path $homeDir '.claude') 'projects') $encodedCwd
 
     if (-not (Test-Path $sessionDir)) { return }
 
