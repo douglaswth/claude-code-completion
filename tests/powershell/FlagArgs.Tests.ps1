@@ -1,0 +1,82 @@
+BeforeAll {
+    . $PSScriptRoot/TestHelper.ps1
+    Initialize-ClaudeTests
+
+    New-MockClaude @{
+        '--version' = '1.0.0 (Claude Code)'
+        '--help' = @'
+Usage: claude [options] [command] [prompt]
+
+Options:
+  --add-dir <directories...>     Additional directories
+  -c, --continue                 Continue most recent conversation
+  --debug-file <file>            Debug output file
+  --effort <level>               Effort level (low, medium, high)
+  --input-format <format>        Input format (choices: "text", "stream-json")
+  --model <model>                Model for session
+  --output-format <format>       Output format (choices: "text", "json", "stream-json")
+  --permission-mode <mode>       Permission mode
+  --plugin-dir <directory>       Plugin directory
+  -p, --print                    Print response and exit
+  -r, --resume [value]           Resume a conversation
+  -h, --help                     Display help
+  -v, --version                  Output the version number
+
+Commands:
+  auth                           Manage authentication
+  mcp                            Configure MCP servers
+'@
+        'auth --help' = 'Usage: claude auth'
+        'mcp --help' = 'Usage: claude mcp'
+    }
+
+    $env:XDG_CACHE_HOME = Join-Path ([System.IO.Path]::GetTempPath()) "claude-test-$([guid]::NewGuid())"
+}
+
+AfterAll {
+    if ($env:XDG_CACHE_HOME -and (Test-Path $env:XDG_CACHE_HOME)) {
+        Remove-Item -Recurse -Force $env:XDG_CACHE_HOME
+    }
+    $env:XDG_CACHE_HOME = $null
+}
+
+Describe 'Flag argument completion' {
+    It 'completes model aliases' {
+        $results = Get-CompletionText 'claude --model '
+        $results | Should -Contain 'sonnet'
+        $results | Should -Contain 'opus'
+        $results | Should -Contain 'haiku'
+    }
+
+    It 'completes permission mode choices' {
+        $results = Get-CompletionText 'claude --permission-mode '
+        $results | Should -Contain 'default'
+        $results | Should -Contain 'plan'
+    }
+
+    It 'completes output format choices' {
+        $results = Get-CompletionText 'claude --output-format '
+        $results | Should -Contain 'text'
+        $results | Should -Contain 'json'
+        $results | Should -Contain 'stream-json'
+    }
+
+    It 'completes effort levels' {
+        $results = Get-CompletionText 'claude --effort '
+        $results | Should -Contain 'low'
+        $results | Should -Contain 'medium'
+        $results | Should -Contain 'high'
+    }
+
+    It 'completes input format choices' {
+        $results = Get-CompletionText 'claude --input-format '
+        $results | Should -Contain 'text'
+        $results | Should -Contain 'stream-json'
+    }
+
+    It 'filters model completions by partial input' {
+        $results = Get-CompletionText 'claude --model so'
+        $results | Should -Contain 'sonnet'
+        $results | Should -Not -Contain 'opus'
+    }
+}

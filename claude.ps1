@@ -114,9 +114,84 @@ function global:_claude_parse_subcommands {
     }
 }
 
+$script:_claude_known_models = @(
+    'sonnet', 'opus', 'haiku',
+    'claude-sonnet-4-5-20250514',
+    'claude-sonnet-4-6',
+    'claude-opus-4-5-20250514',
+    'claude-opus-4-6',
+    'claude-haiku-4-5-20251001'
+)
+
 function global:_claude_complete_flag_arg {
     param([string]$Flag, [string]$WordToComplete)
-    # TODO: implement in Task 6
+
+    switch ($Flag) {
+        '--model' {
+            $models = @($script:_claude_known_models)
+            $cacheDir = _claude_cache_dir
+            $helpFile = Join-Path $cacheDir '_root_help'
+            if (Test-Path $helpFile) {
+                foreach ($line in Get-Content $helpFile) {
+                    if ($line -match '(claude-[a-z]+-[0-9][^\s]*)') {
+                        $models += $Matches[1]
+                    }
+                }
+            }
+            $models | Select-Object -Unique | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+                [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+            }
+        }
+        '--permission-mode' {
+            @('acceptEdits', 'bypassPermissions', 'default', 'dontAsk', 'plan') |
+                Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+                }
+        }
+        '--output-format' {
+            @('text', 'json', 'stream-json') |
+                Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+                }
+        }
+        '--input-format' {
+            @('text', 'stream-json') |
+                Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+                }
+        }
+        '--effort' {
+            @('low', 'medium', 'high') |
+                Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+                }
+        }
+        { $_ -in '--resume', '-r' } {
+            _claude_complete_sessions -WordToComplete $WordToComplete
+        }
+        { $_ -in '--add-dir', '--plugin-dir' } {
+            Get-ChildItem -Path "$WordToComplete*" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, 'ProviderContainer', $_.FullName)
+            }
+        }
+        { $_ -in '--debug-file', '--mcp-config', '--settings' } {
+            Get-ChildItem -Path "$WordToComplete*" -File -ErrorAction SilentlyContinue | ForEach-Object {
+                [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, 'ProviderItem', $_.FullName)
+            }
+        }
+        default {
+            # Unknown flag arg — default to file completion
+            Get-ChildItem -Path "$WordToComplete*" -ErrorAction SilentlyContinue | ForEach-Object {
+                $type = if ($_.PSIsContainer) { 'ProviderContainer' } else { 'ProviderItem' }
+                [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, $type, $_.FullName)
+            }
+        }
+    }
+}
+
+function global:_claude_complete_sessions {
+    param([string]$WordToComplete)
+    # TODO: implement in Task 7
 }
 
 function global:_claude_complete_subcmd_arg {
