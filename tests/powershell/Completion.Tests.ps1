@@ -82,6 +82,13 @@ Describe 'Top-level completion' {
         $results = Get-CompletionText 'claude au'
         $results | Should -Contain 'auth'
     }
+
+    It 'exact subcommand without trailing space still completes as subcommand' {
+        # "claude auth" (no trailing space) should offer "auth" as a subcommand,
+        # not try to complete auth's children with "auth" as the prefix
+        $results = Get-CompletionText 'claude auth'
+        $results | Should -Contain 'auth'
+    }
 }
 
 Describe 'Subcommand completion' {

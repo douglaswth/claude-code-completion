@@ -22,7 +22,7 @@ Both shells share the same core capabilities:
 
 - **Rich tooltips** — completion results include descriptive tooltips shown by PowerShell's completion UI
 - **Built-in JSON parsing** — uses `ConvertFrom-Json` natively, no `jq` dependency needed
-- **Cross-platform** — works on Windows, macOS, and Linux wherever PowerShell 7+ is available
+- **Cross-platform** — supports PowerShell 5.1 (Windows) and PowerShell 7+ (Windows, macOS, Linux)
 
 ## Installation
 

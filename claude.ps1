@@ -187,6 +187,9 @@ function global:_claude_complete_flag_arg {
 }
 
 function global:_claude_encoded_cwd {
+    # Encodes CWD to match Claude CLI's project directory naming.
+    # Windows: C:\Users\foo → C--Users-foo (colon and backslashes become dashes)
+    # Unix: /home/foo → -home-foo (slashes become dashes; colons preserved)
     $cwd = $pwd.Path
     if ($PSVersionTable.PSVersion.Major -le 5 -or $IsWindows) {
         $cwd -replace '[:\\/]', '-'
@@ -310,9 +313,11 @@ function global:_claude_complete {
     }
 
     # Find the subcommand (first non-flag element after 'claude')
+    # Exclude the word being completed — matches bash behavior (i < cword)
     $subcmd = ''
     $subcmdIndex = -1
-    for ($i = 1; $i -lt $Elements.Count; $i++) {
+    $loopLimit = if ($WordToComplete -ne '') { $Elements.Count - 1 } else { $Elements.Count }
+    for ($i = 1; $i -lt $loopLimit; $i++) {
         if ($Elements[$i] -notlike '-*') {
             $potential = $Elements[$i]
             $subcmdFile = Join-Path $cacheDir '_root_subcommands'
@@ -345,9 +350,9 @@ function global:_claude_complete {
     }
 
     if ($subcmd) {
-        # Find sub-subcommand
+        # Find sub-subcommand (also exclude the word being completed)
         $subSubcmd = ''
-        for ($i = $subcmdIndex + 1; $i -lt $Elements.Count; $i++) {
+        for ($i = $subcmdIndex + 1; $i -lt $loopLimit; $i++) {
             if ($Elements[$i] -notlike '-*') {
                 $potential = $Elements[$i]
                 $subSubFile = Join-Path $cacheDir "${subcmd}_subcommands"
