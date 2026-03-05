@@ -114,12 +114,118 @@ function global:_claude_parse_subcommands {
     }
 }
 
+function global:_claude_complete_flag_arg {
+    param([string]$Flag, [string]$WordToComplete)
+    # TODO: implement in Task 6
+}
+
+function global:_claude_complete_subcmd_arg {
+    param([string]$Subcmd, [string]$SubSubcmd, [string]$WordToComplete)
+    # TODO: implement in Task 8
+}
+
 function global:_claude_complete {
     param(
         [string]$WordToComplete,
         [string[]]$Elements
     )
-    # TODO: implement
+
+    $cacheDir = _claude_cache_dir
+
+    # Build cache if needed
+    if (-not (Test-Path $cacheDir)) {
+        _claude_build_cache
+    }
+
+    # Find the subcommand (first non-flag element after 'claude')
+    $subcmd = ''
+    $subcmdIndex = -1
+    for ($i = 1; $i -lt $Elements.Count; $i++) {
+        if ($Elements[$i] -notlike '-*') {
+            $potential = $Elements[$i]
+            $subcmdFile = Join-Path $cacheDir '_root_subcommands'
+            if ((Test-Path $subcmdFile) -and ((Get-Content $subcmdFile) -contains $potential)) {
+                $subcmd = $potential
+                $subcmdIndex = $i
+                break
+            }
+        }
+    }
+
+    # Determine the previous element (for flag-argument detection)
+    $prev = if ($Elements.Count -ge 2 -and $WordToComplete -eq '') {
+        $Elements[-1]
+    } elseif ($Elements.Count -ge 3 -and $WordToComplete -ne '') {
+        $Elements[-2]
+    } else { '' }
+
+    # Check if previous word is a flag that takes an argument
+    if ($prev -like '-*') {
+        $flagsWithArgsFile = if ($subcmd) {
+            Join-Path $cacheDir "${subcmd}_flags_with_args"
+        } else {
+            Join-Path $cacheDir '_root_flags_with_args'
+        }
+        if ((Test-Path $flagsWithArgsFile) -and ((Get-Content $flagsWithArgsFile) -contains $prev)) {
+            _claude_complete_flag_arg -Flag $prev -WordToComplete $WordToComplete
+            return
+        }
+    }
+
+    if ($subcmd) {
+        # Find sub-subcommand
+        $subSubcmd = ''
+        for ($i = $subcmdIndex + 1; $i -lt $Elements.Count; $i++) {
+            if ($Elements[$i] -notlike '-*') {
+                $potential = $Elements[$i]
+                $subSubFile = Join-Path $cacheDir "${subcmd}_subcommands"
+                if ((Test-Path $subSubFile) -and ((Get-Content $subSubFile) -contains $potential)) {
+                    $subSubcmd = $potential
+                    break
+                }
+            }
+        }
+
+        if ($WordToComplete -like '-*') {
+            # Complete subcommand flags
+            $flagsFile = Join-Path $cacheDir "${subcmd}_flags"
+            if (Test-Path $flagsFile) {
+                Get-Content $flagsFile | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterName', $_)
+                }
+            }
+        } elseif ($subSubcmd) {
+            # Complete positional args for sub-subcommands
+            _claude_complete_subcmd_arg -Subcmd $subcmd -SubSubcmd $subSubcmd -WordToComplete $WordToComplete
+        } else {
+            # Complete sub-subcommands
+            $subFile = Join-Path $cacheDir "${subcmd}_subcommands"
+            if (Test-Path $subFile) {
+                Get-Content $subFile | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+                    [System.Management.Automation.CompletionResult]::new($_, $_, 'Command', $_)
+                }
+            }
+        }
+    } else {
+        # Top level
+        if ($WordToComplete -like '-*') {
+            # Complete flags
+            $flagsFile = Join-Path $cacheDir '_root_flags'
+            if (Test-Path $flagsFile) {
+                Get-Content $flagsFile | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterName', $_)
+                }
+            }
+        } else {
+            # Complete subcommands
+            $subFile = Join-Path $cacheDir '_root_subcommands'
+            if (Test-Path $subFile) {
+                Get-Content $subFile | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+                    [System.Management.Automation.CompletionResult]::new($_, $_, 'Command', $_)
+                }
+            }
+        }
+    }
 }
 
 Register-ArgumentCompleter -CommandName claude -Native -ScriptBlock {
