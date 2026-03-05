@@ -57,3 +57,8 @@ jobs:
         shell: pwsh
         run: |
           & ${{ matrix.shell }} -ExecutionPolicy Bypass -File tests/powershell/Invoke-Tests.ps1
+
+      - name: Run tests with coverage
+        shell: pwsh
+        run: |
+          & ${{ matrix.shell }} -ExecutionPolicy Bypass -File tests/powershell/Invoke-Tests.ps1 -Coverage
