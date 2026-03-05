@@ -8,15 +8,19 @@ function global:_claude_version {
     }
 }
 
+function global:_claude_cache_base {
+    if ($env:XDG_CACHE_HOME) {
+        $env:XDG_CACHE_HOME
+    } elseif ($PSVersionTable.PSVersion.Major -le 5 -or $IsWindows) {
+        $env:LOCALAPPDATA
+    } else {
+        Join-Path $HOME '.cache'
+    }
+}
+
 function global:_claude_cache_dir {
     $version = _claude_version
-    if ($env:XDG_CACHE_HOME) {
-        $base = $env:XDG_CACHE_HOME
-    } elseif ($PSVersionTable.PSVersion.Major -le 5 -or $IsWindows) {
-        $base = $env:LOCALAPPDATA
-    } else {
-        $base = Join-Path $HOME '.cache'
-    }
+    $base = _claude_cache_base
     Join-Path $base 'claude-code-completion' 'powershell' $version
 }
 
@@ -28,14 +32,7 @@ function global:_claude_ensure_cache {
 }
 
 function global:_claude_cleanup_old_cache {
-    if ($env:XDG_CACHE_HOME) {
-        $base = $env:XDG_CACHE_HOME
-    } elseif ($PSVersionTable.PSVersion.Major -le 5 -or $IsWindows) {
-        $base = $env:LOCALAPPDATA
-    } else {
-        $base = Join-Path $HOME '.cache'
-    }
-    $baseDir = Join-Path $base 'claude-code-completion' 'powershell'
+    $baseDir = Join-Path (_claude_cache_base) 'claude-code-completion' 'powershell'
 
     if (-not (Test-Path $baseDir)) { return }
 
@@ -232,6 +229,7 @@ function global:_claude_complete_sessions {
     param([string]$WordToComplete)
 
     $encodedCwd = _claude_encoded_cwd
+    # $env:HOME is checked first for testability ($HOME is immutable after startup)
     $homeDir = if ($env:HOME) { $env:HOME } else { $HOME }
     $sessionDir = Join-Path $homeDir '.claude' 'projects' $encodedCwd
 
