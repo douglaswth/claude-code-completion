@@ -257,9 +257,45 @@ function global:_claude_complete_sessions {
     }
 }
 
+function global:_claude_mcp_server_names {
+    $output = claude mcp list 2>$null
+    if (-not $output) { return }
+    foreach ($line in ($output -split "`n")) {
+        if ($line -match ':' -and $line -notmatch '^Checking|^$') {
+            ($line -split ':')[0].Trim()
+        }
+    }
+}
+
+function global:_claude_plugin_names {
+    $output = claude plugin list --json 2>$null
+    if (-not $output) { return }
+    try {
+        $plugins = $output | ConvertFrom-Json
+        foreach ($p in $plugins) {
+            $p.name
+        }
+    } catch {}
+}
+
 function global:_claude_complete_subcmd_arg {
     param([string]$Subcmd, [string]$SubSubcmd, [string]$WordToComplete)
-    # TODO: implement in Task 8
+
+    $key = "$Subcmd/$SubSubcmd"
+    switch ($key) {
+        { $_ -in 'mcp/get', 'mcp/remove' } {
+            $names = @(_claude_mcp_server_names)
+            $names | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+                [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+            }
+        }
+        { $_ -in 'plugin/disable', 'plugin/enable', 'plugin/uninstall', 'plugin/remove' } {
+            $names = @(_claude_plugin_names)
+            $names | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+                [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+            }
+        }
+    }
 }
 
 function global:_claude_complete {
