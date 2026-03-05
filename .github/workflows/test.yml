@@ -41,14 +41,18 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        shell: [pwsh]
+        include:
+          - os: windows-latest
+            shell: powershell
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Pester
-        shell: pwsh
+        shell: ${{ matrix.shell }}
         run: |
-          Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
+          Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser -SkipPublisherCheck
 
       - name: Run tests
-        shell: pwsh
+        shell: ${{ matrix.shell }}
         run: Invoke-Pester tests/powershell/ -Output Detailed -EnableExit
