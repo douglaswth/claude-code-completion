@@ -130,7 +130,7 @@ function global:_claude_complete_flag_arg {
             $helpFile = Join-Path $cacheDir '_root_help'
             if (Test-Path $helpFile) {
                 foreach ($line in Get-Content $helpFile) {
-                    if ($line -match '(claude-[a-z]+-[0-9][^\s]*)') {
+                    if ($line -match '(claude-[a-z]+-[0-9][a-z0-9-]*)') {
                         $models += $Matches[1]
                     }
                 }

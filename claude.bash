@@ -273,7 +273,7 @@ _claude_complete_flag_arg() {
             cache_dir="$(_claude_cache_dir)"
             if [[ -f "$cache_dir/_root_help" ]]; then
                 while IFS= read -r line; do
-                    if [[ "$line" =~ claude-[a-z]+-[0-9] ]]; then
+                    if [[ "$line" =~ claude-[a-z]+-[0-9][a-z0-9-]* ]]; then
                         models+=("${BASH_REMATCH[0]}")
                     fi
                 done < "$cache_dir/_root_help"
