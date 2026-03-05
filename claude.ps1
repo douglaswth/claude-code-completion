@@ -189,9 +189,72 @@ function global:_claude_complete_flag_arg {
     }
 }
 
+function global:_claude_encoded_cwd {
+    $cwd = $pwd.Path
+    if ($PSVersionTable.PSVersion.Major -le 5 -or $IsWindows) {
+        $cwd -replace '[:\\/]', '-'
+    } else {
+        $cwd.Replace('/', '-')
+    }
+}
+
+function global:_claude_session_message {
+    param([string]$FilePath)
+    foreach ($line in Get-Content -Path $FilePath) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        try {
+            $obj = $line | ConvertFrom-Json
+        } catch {
+            continue
+        }
+        if ($obj.type -ne 'user') { continue }
+
+        $content = $obj.message.content
+        $text = $null
+        if ($content -is [string]) {
+            $text = $content
+        } elseif ($content -is [array] -or $content.Count -gt 0) {
+            foreach ($item in $content) {
+                if ($item.type -eq 'text') {
+                    $text = $item.text
+                    break
+                }
+            }
+        }
+        if (-not $text) { continue }
+        if ($text -match '<ide_' -or $text -match '<command-') { continue }
+
+        return $text
+    }
+}
+
 function global:_claude_complete_sessions {
     param([string]$WordToComplete)
-    # TODO: implement in Task 7
+
+    $encodedCwd = _claude_encoded_cwd
+    $homeDir = if ($env:HOME) { $env:HOME } else { $HOME }
+    $sessionDir = Join-Path $homeDir '.claude' 'projects' $encodedCwd
+
+    if (-not (Test-Path $sessionDir)) { return }
+
+    $files = Get-ChildItem -Path $sessionDir -Filter '*.jsonl' -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 10
+
+    foreach ($file in $files) {
+        $sessionId = $file.BaseName
+        if ($sessionId -like "$WordToComplete*") {
+            $msg = _claude_session_message -FilePath $file.FullName
+            if (-not $msg) { $msg = '(session)' }
+            $listText = if ($msg.Length -gt 40) { $msg.Substring(0, 39) + [char]0x2026 } else { $msg }
+            [System.Management.Automation.CompletionResult]::new(
+                $sessionId,
+                "$sessionId  $listText",
+                'ParameterValue',
+                $msg
+            )
+        }
+    }
 }
 
 function global:_claude_complete_subcmd_arg {
