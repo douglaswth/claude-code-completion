@@ -30,10 +30,10 @@ jobs:
         run: curl -s https://bashunit.typeddevs.com/install.sh | bash
 
       - name: Run tests
-        run: ./lib/bashunit tests/
+        run: ./lib/bashunit tests/bash/
 
       - name: Run tests with coverage
-        run: ./lib/bashunit tests/ --coverage --coverage-paths claude.bash
+        run: ./lib/bashunit tests/bash/ --coverage --coverage-paths claude.bash
 
   powershell:
     runs-on: ${{ matrix.os }}

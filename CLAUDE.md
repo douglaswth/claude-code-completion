@@ -22,20 +22,20 @@ Tests use mock `claude` commands to avoid requiring a real installation.
 
 ### Bash
 
-Tests use [bashunit](https://bashunit.typeddevs.com/) in `tests/`:
+Tests use [bashunit](https://bashunit.typeddevs.com/) in `tests/bash/`:
 
 ```bash
 # Run all tests
-bashunit tests/
+bashunit tests/bash/
 
 # Run a single test file
-bashunit tests/completion_test.bash
+bashunit tests/bash/completion_test.bash
 
 # Run with coverage
-bashunit tests/ --coverage --coverage-paths claude.bash
+bashunit tests/bash/ --coverage --coverage-paths claude.bash
 ```
 
-Shared test infrastructure lives in `tests/bootstrap.bash`.
+Shared test infrastructure lives in `tests/bash/bootstrap.bash`.
 
 ### PowerShell
 
