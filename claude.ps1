@@ -45,6 +45,33 @@ function global:_claude_cleanup_old_cache {
     } | Remove-Item -Recurse -Force
 }
 
+function global:_claude_build_cache {
+    $cacheDir = _claude_cache_dir
+    New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+
+    # Parse root level
+    $helpOutput = claude --help 2>$null
+    $helpLines = @($helpOutput -split "`n")
+    Set-Content -Path (Join-Path $cacheDir '_root_help') -Value $helpOutput
+    _claude_parse_flags -HelpLines $helpLines | Set-Content -Path (Join-Path $cacheDir '_root_flags')
+    _claude_parse_flags_with_args -HelpLines $helpLines | Set-Content -Path (Join-Path $cacheDir '_root_flags_with_args')
+    $subcommands = @(_claude_parse_subcommands -HelpLines $helpLines)
+    $subcommands | Set-Content -Path (Join-Path $cacheDir '_root_subcommands')
+
+    # Parse each subcommand
+    foreach ($subcmd in $subcommands) {
+        if ([string]::IsNullOrWhiteSpace($subcmd)) { continue }
+        $subHelp = claude $subcmd --help 2>$null
+        if (-not $subHelp) { continue }
+        $subHelpLines = @($subHelp -split "`n")
+        _claude_parse_flags -HelpLines $subHelpLines | Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags")
+        _claude_parse_flags_with_args -HelpLines $subHelpLines | Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags_with_args")
+        _claude_parse_subcommands -HelpLines $subHelpLines | Set-Content -Path (Join-Path $cacheDir "${subcmd}_subcommands")
+    }
+
+    _claude_cleanup_old_cache
+}
+
 function global:_claude_parse_flags {
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
