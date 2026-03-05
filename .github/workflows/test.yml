@@ -51,7 +51,12 @@ jobs:
 
       - name: Run tests
         shell: pwsh
-        run: Invoke-Pester tests/powershell/ -Output Detailed -EnableExit
+        run: |
+          $config = New-PesterConfiguration
+          $config.Run.Path = 'tests/powershell/'
+          $config.Output.Verbosity = 'Detailed'
+          $config.Run.Exit = $true
+          Invoke-Pester -Configuration $config
 
   powershell-5:
     name: powershell (windows-latest, 5.1)
@@ -66,4 +71,9 @@ jobs:
 
       - name: Run tests
         shell: powershell
-        run: Invoke-Pester tests/powershell/ -Output Detailed -EnableExit
+        run: |
+          $config = New-PesterConfiguration
+          $config.Run.Path = 'tests/powershell/'
+          $config.Output.Verbosity = 'Detailed'
+          $config.Run.Exit = $true
+          Invoke-Pester -Configuration $config
