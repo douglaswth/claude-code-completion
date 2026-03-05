@@ -17,17 +17,14 @@ Options:
   --debug-file <file>            Debug output file
   --effort <level>               Effort level (low, medium, high)
   --input-format <format>        Input format (choices: "text", "stream-json")
-  --model <model>                Model for session
+  --model <model>                Model for session (default: 'claude-test-9-99').
   --output-format <format>       Output format (choices: "text", "json", "stream-json")
   --permission-mode <mode>       Permission mode (choices: "acceptEdits", "bypassPermissions", "default", "dontAsk", "plan")
   --plugin-dir <directory>       Plugin directory
   -p, --print                    Print response and exit
   -r, --resume [value]           Resume a conversation
-  --settings <file>               Settings file
   -h, --help                     Display help
   -v, --version                  Output the version number
-
-  Defaults to 'claude-test-9-99').
 
 Commands:
   auth                           Manage authentication
