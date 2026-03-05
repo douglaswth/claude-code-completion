@@ -47,13 +47,16 @@ Invoke-Pester tests/powershell/ -Output Detailed
 
 # Run a single test file
 Invoke-Pester tests/powershell/Completion.Tests.ps1 -Output Detailed
+
+# Run with coverage
+pwsh -File tests/powershell/Invoke-Tests.ps1 -Coverage
 ```
 
 Shared test infrastructure lives in `tests/powershell/TestHelper.ps1`.
 
 ### Coverage Review
 
-After adding or changing tests, run coverage and walk through each uncovered area one at a time with the user. For each area, show the uncovered line(s) marked with `✗` in context of the surrounding source code, explain why it's uncovered, and categorize it:
+After adding or changing tests in **either** shell, run coverage for **both** shells and walk through each uncovered area one at a time with the user. For each area, show the uncovered line(s) marked with `✗` in context of the surrounding source code, explain why it's uncovered, and categorize it:
 
 - **False negative** — coverage instrumentation artifact (e.g., `done < file` redirects, string contents passed to other programs, file-scope declarations)
 - **Worth testing** — real uncovered logic that should have a test; add to a todo list

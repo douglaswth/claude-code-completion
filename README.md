@@ -128,6 +128,9 @@ Invoke-Pester tests/powershell/ -Output Detailed
 
 # Run a single test file
 Invoke-Pester tests/powershell/Completion.Tests.ps1 -Output Detailed
+
+# Run with coverage
+pwsh -File tests/powershell/Invoke-Tests.ps1 -Coverage
 ```
 
 Shared test infrastructure lives in `tests/powershell/TestHelper.ps1`.
