@@ -34,3 +34,21 @@ jobs:
 
       - name: Run tests with coverage
         run: ./lib/bashunit tests/ --coverage --coverage-paths claude.bash
+
+  powershell:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pester
+        shell: pwsh
+        run: |
+          Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
+
+      - name: Run tests
+        shell: pwsh
+        run: Invoke-Pester tests/powershell/ -Output Detailed -EnableExit
