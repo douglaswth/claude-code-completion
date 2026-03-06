@@ -31,7 +31,43 @@ Options:
 
 Commands:
   auth                           Manage authentication
+  doctor                         Check health of auto-updater
   mcp                            Configure MCP servers
+HELP
+        ;;
+    "auth --help")
+        cat << 'HELP'
+Usage: claude auth [options] [command]
+
+Options:
+  -h, --help        Display help
+
+Commands:
+  login [options]   Sign in
+  logout            Log out
+  status [options]  Show status
+HELP
+        ;;
+    "doctor --help")
+        cat << 'HELP'
+Usage: claude doctor [options]
+
+Options:
+  -h, --help        Display help
+HELP
+        ;;
+    "mcp --help")
+        cat << 'HELP'
+Usage: claude mcp [options] [command]
+
+Options:
+  -h, --help        Display help
+
+Commands:
+  add [options] <name> <commandOrUrl> [args...]  Add server
+  get <name>                                     Get server
+  list                                           List servers
+  remove [options] <name>                        Remove server
 HELP
         ;;
     *) ;;

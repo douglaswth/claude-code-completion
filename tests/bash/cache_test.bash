@@ -64,3 +64,54 @@ function test_cleanup_old_cache_preserves_current_version() {
     _claude_cleanup_old_cache
     assert_directory_exists "$cache_dir"
 }
+
+# --- Build cache tests ---
+
+function test_build_cache_creates_root_flags_file() {
+    _claude_build_cache
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_file_exists "$cache_dir/_root_flags"
+}
+
+function test_build_cache_root_flags_contains_model() {
+    _claude_build_cache
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_file_contains "$cache_dir/_root_flags" "--model"
+}
+
+function test_build_cache_creates_root_subcommands_file() {
+    _claude_build_cache
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_file_exists "$cache_dir/_root_subcommands"
+}
+
+function test_build_cache_root_subcommands_contains_doctor() {
+    _claude_build_cache
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_file_contains "$cache_dir/_root_subcommands" "doctor"
+}
+
+function test_build_cache_creates_doctor_flags_file() {
+    _claude_build_cache
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_file_exists "$cache_dir/doctor_flags"
+}
+
+function test_build_cache_creates_doctor_flags_with_args_file() {
+    _claude_build_cache
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_file_exists "$cache_dir/doctor_flags_with_args"
+}
+
+function test_build_cache_creates_doctor_subcommands_file() {
+    _claude_build_cache
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_file_exists "$cache_dir/doctor_subcommands"
+}

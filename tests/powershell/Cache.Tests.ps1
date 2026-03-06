@@ -101,7 +101,14 @@ Options:
 
 Commands:
   auth                           Manage authentication
+  doctor                         Check health of auto-updater
   mcp                            Configure MCP servers
+'@
+                'doctor --help' = @'
+Usage: claude doctor [options]
+
+Options:
+  -h, --help        Display help
 '@
                 'auth --help' = @'
 Usage: claude auth [options] [command]
@@ -177,6 +184,18 @@ Commands:
 
         It 'mcp subcommands contains add' {
             Get-Content (Join-Path $script:CacheDir 'mcp_subcommands') | Should -Contain 'add'
+        }
+
+        It 'creates doctor flags file' {
+            Join-Path $script:CacheDir 'doctor_flags' | Should -Exist
+        }
+
+        It 'creates doctor flags_with_args file even when empty' {
+            Join-Path $script:CacheDir 'doctor_flags_with_args' | Should -Exist
+        }
+
+        It 'creates doctor subcommands file even when empty' {
+            Join-Path $script:CacheDir 'doctor_subcommands' | Should -Exist
         }
     }
 }
