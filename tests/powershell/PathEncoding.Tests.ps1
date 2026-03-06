@@ -5,7 +5,7 @@ BeforeAll {
 
 Describe 'Path encoding' {
     It 'replaces path separators with dashes' {
-        $testDir = Join-Path $TestDrive 'foo' 'bar'
+        $testDir = Join-Path (Join-Path $TestDrive 'foo') 'bar'
         New-Item -ItemType Directory -Path $testDir -Force | Out-Null
         Push-Location $testDir
         try {

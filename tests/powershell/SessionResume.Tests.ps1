@@ -132,7 +132,8 @@ Describe 'Session completion' {
 
     It 'long message is truncated in list text' {
         $results = _claude_complete_sessions -WordToComplete 'eee'
-        $results[0].ListItemText | Should -BeLike '*…'
+        $ellipsis = [char]0x2026
+        $results[0].ListItemText | Should -BeLike "*$ellipsis"
         $results[0].ListItemText.Length | Should -BeLessThan ($results[0].ToolTip.Length + 40)
     }
 
