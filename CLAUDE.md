@@ -38,12 +38,12 @@ Shared test infrastructure lives in `tests/bash/bootstrap.bash`.
 
 Tests use [Pester](https://pester.dev/) v5+ in `tests/powershell/`:
 
-```powershell
+```bash
 # Run all tests
-pwsh -File tests/powershell/Invoke-Tests.ps1
+./tests/powershell/Invoke-Tests.ps1
 
 # Run with coverage
-pwsh -File tests/powershell/Invoke-Tests.ps1 -Coverage
+./tests/powershell/Invoke-Tests.ps1 -Coverage
 ```
 
 Shared test infrastructure lives in `tests/powershell/TestHelper.ps1`.

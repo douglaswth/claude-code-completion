@@ -1,3 +1,4 @@
+#!/usr/bin/env pwsh
 # Test runner script — used by CI to invoke Pester under different shells.
 param([switch]$Coverage)
 
