@@ -26,10 +26,10 @@ Tests use [bashunit](https://bashunit.typeddevs.com/) in `tests/bash/`:
 
 ```bash
 # Run all tests (installs bashunit automatically if needed)
-bash tests/bash/run-tests.sh
+./tests/bash/run-tests.sh
 
 # Run with coverage
-bash tests/bash/run-tests.sh --coverage
+./tests/bash/run-tests.sh --coverage
 ```
 
 Shared test infrastructure lives in `tests/bash/bootstrap.bash`.
