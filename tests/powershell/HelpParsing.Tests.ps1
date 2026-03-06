@@ -28,9 +28,9 @@ Commands:
         $helpLines = $helpText -split "`n"
     }
 
-    Context '_claude_parse_flags' {
+    Context '_ClaudeParseFlags' {
         BeforeAll {
-            $flags = @(_claude_parse_flags -HelpLines $helpLines)
+            $flags = @(_ClaudeParseFlags -HelpLines $helpLines)
         }
 
         It 'extracts long flags' {
@@ -46,9 +46,9 @@ Commands:
         }
     }
 
-    Context '_claude_parse_flags_with_args' {
+    Context '_ClaudeParseFlagsWithArgs' {
         BeforeAll {
-            $flagsWithArgs = @(_claude_parse_flags_with_args -HelpLines $helpLines)
+            $flagsWithArgs = @(_ClaudeParseFlagsWithArgs -HelpLines $helpLines)
         }
 
         It 'includes flags that take values' {
@@ -62,9 +62,9 @@ Commands:
         }
     }
 
-    Context '_claude_parse_subcommands' {
+    Context '_ClaudeParseSubcommands' {
         BeforeAll {
-            $subcommands = @(_claude_parse_subcommands -HelpLines $helpLines)
+            $subcommands = @(_ClaudeParseSubcommands -HelpLines $helpLines)
         }
 
         It 'extracts subcommand names' {

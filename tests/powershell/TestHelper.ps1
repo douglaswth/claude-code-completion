@@ -59,7 +59,7 @@ function Invoke-ClaudeCompleter {
     } else {
         $wordToComplete = $words[-1]
     }
-    _claude_complete -WordToComplete $wordToComplete -Elements $words
+    _ClaudeComplete -WordToComplete $wordToComplete -Elements $words
 }
 
 # Extract just the CompletionText values from completer results.

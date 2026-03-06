@@ -14,21 +14,21 @@ Describe 'Cache management' {
         $env:XDG_CACHE_HOME = $null
     }
 
-    Context '_claude_version' {
+    Context '_ClaudeVersion' {
         It 'returns the version string' {
-            _claude_version | Should -Be '1.0.0'
+            _ClaudeVersion | Should -Be '1.0.0'
         }
     }
 
-    Context '_claude_cache_dir' {
+    Context '_ClaudeCacheDir' {
         It 'returns path under XDG_CACHE_HOME' {
-            $dir = _claude_cache_dir
+            $dir = _ClaudeCacheDir
             $dir | Should -BeLike "$script:TestCacheDir*"
         }
 
         It 'falls back to platform default when XDG_CACHE_HOME is unset' {
             $env:XDG_CACHE_HOME = $null
-            $dir = _claude_cache_dir
+            $dir = _ClaudeCacheDir
             if ($PSVersionTable.PSVersion.Major -le 5 -or $IsWindows) {
                 $dir | Should -BeLike "$env:LOCALAPPDATA*"
             } else {
@@ -37,50 +37,50 @@ Describe 'Cache management' {
         }
 
         It 'includes powershell subdirectory' {
-            $dir = _claude_cache_dir
+            $dir = _ClaudeCacheDir
             $dir | Should -BeLike '*powershell*'
         }
 
         It 'includes version component' {
-            $dir = _claude_cache_dir
+            $dir = _ClaudeCacheDir
             $dir | Should -BeLike '*1.0.0*'
         }
     }
 
-    Context '_claude_ensure_cache' {
+    Context '_ClaudeEnsureCache' {
         It 'creates the cache directory' {
-            _claude_ensure_cache
-            $dir = _claude_cache_dir
+            _ClaudeEnsureCache
+            $dir = _ClaudeCacheDir
             Test-Path $dir | Should -BeTrue
         }
     }
 
-    Context '_claude_cleanup_old_cache' {
+    Context '_ClaudeCleanupOldCache' {
         It 'removes old version directories' {
-            _claude_ensure_cache
+            _ClaudeEnsureCache
             $baseDir = Join-Path (Join-Path $script:TestCacheDir 'claude-code-completion') 'powershell'
             New-Item -ItemType Directory -Path (Join-Path $baseDir '0.9.0') -Force | Out-Null
             New-Item -ItemType Directory -Path (Join-Path $baseDir '0.8.0') -Force | Out-Null
 
-            _claude_cleanup_old_cache
+            _ClaudeCleanupOldCache
 
             Test-Path (Join-Path $baseDir '0.9.0') | Should -BeFalse
             Test-Path (Join-Path $baseDir '0.8.0') | Should -BeFalse
         }
 
         It 'preserves the current version directory' {
-            _claude_ensure_cache
-            $dir = _claude_cache_dir
+            _ClaudeEnsureCache
+            $dir = _ClaudeCacheDir
             $baseDir = Join-Path (Join-Path $script:TestCacheDir 'claude-code-completion') 'powershell'
             New-Item -ItemType Directory -Path (Join-Path $baseDir '0.9.0') -Force | Out-Null
 
-            _claude_cleanup_old_cache
+            _ClaudeCleanupOldCache
 
             Test-Path $dir | Should -BeTrue
         }
     }
 
-    Context '_claude_build_cache' {
+    Context '_ClaudeBuildCache' {
         BeforeEach {
             $script:TestCacheDir = Join-Path $TestDrive "build-cache-$([guid]::NewGuid())"
             $env:XDG_CACHE_HOME = $script:TestCacheDir
@@ -127,8 +127,8 @@ Commands:
   remove [options] <name>                        Remove server
 '@
             }
-            _claude_build_cache
-            $script:CacheDir = _claude_cache_dir
+            _ClaudeBuildCache
+            $script:CacheDir = _ClaudeCacheDir
         }
 
         AfterEach {

@@ -58,8 +58,8 @@ BeforeAll {
 '@ | Set-Content $file
     (Get-Item $file).LastWriteTime = [datetime]'2026-06-01'
 
-    # Override _claude_encoded_cwd to match our fake project
-    function global:_claude_encoded_cwd { '-home-user-myproject' }
+    # Override _ClaudeEncodedCwd to match our fake project
+    function global:_ClaudeEncodedCwd { '-home-user-myproject' }
 }
 
 AfterAll {
@@ -70,73 +70,73 @@ AfterAll {
 Describe 'Session message extraction' {
     It 'extracts simple user message' {
         $projDir = Join-Path (Join-Path (Join-Path $script:MockHome '.claude') 'projects') '-home-user-myproject'
-        $msg = _claude_session_message -FilePath (Join-Path $projDir 'aaaaaaaa-1111-1111-1111-111111111111.jsonl')
+        $msg = _ClaudeSessionMessage -FilePath (Join-Path $projDir 'aaaaaaaa-1111-1111-1111-111111111111.jsonl')
         $msg | Should -Be 'Fix the login bug'
     }
 
     It 'skips IDE metadata messages' {
         $projDir = Join-Path (Join-Path (Join-Path $script:MockHome '.claude') 'projects') '-home-user-myproject'
-        $msg = _claude_session_message -FilePath (Join-Path $projDir 'bbbbbbbb-2222-2222-2222-222222222222.jsonl')
+        $msg = _ClaudeSessionMessage -FilePath (Join-Path $projDir 'bbbbbbbb-2222-2222-2222-222222222222.jsonl')
         $msg | Should -Be 'Add the new feature'
     }
 
     It 'extracts string content (non-array)' {
         $projDir = Join-Path (Join-Path (Join-Path $script:MockHome '.claude') 'projects') '-home-user-myproject'
-        $msg = _claude_session_message -FilePath (Join-Path $projDir 'cccccccc-3333-3333-3333-333333333333.jsonl')
+        $msg = _ClaudeSessionMessage -FilePath (Join-Path $projDir 'cccccccc-3333-3333-3333-333333333333.jsonl')
         $msg | Should -Be 'Refactor the parser'
     }
 }
 
 Describe 'Session completion' {
     It 'finds all sessions' {
-        $results = @(_claude_complete_sessions -WordToComplete '')
+        $results = @(_ClaudeCompleteSessions -WordToComplete '')
         $results.Count | Should -Be 5
     }
 
     It 'session 1 UUID present' {
-        $results = _claude_complete_sessions -WordToComplete ''
+        $results = _ClaudeCompleteSessions -WordToComplete ''
         $results.CompletionText | Should -Contain 'aaaaaaaa-1111-1111-1111-111111111111'
     }
 
     It 'session 2 UUID present' {
-        $results = _claude_complete_sessions -WordToComplete ''
+        $results = _ClaudeCompleteSessions -WordToComplete ''
         $results.CompletionText | Should -Contain 'bbbbbbbb-2222-2222-2222-222222222222'
     }
 
     It 'session 3 UUID present' {
-        $results = _claude_complete_sessions -WordToComplete ''
+        $results = _ClaudeCompleteSessions -WordToComplete ''
         $results.CompletionText | Should -Contain 'cccccccc-3333-3333-3333-333333333333'
     }
 
     It 'partial UUID filters results' {
-        $results = @(_claude_complete_sessions -WordToComplete 'aaa')
+        $results = @(_ClaudeCompleteSessions -WordToComplete 'aaa')
         $results.Count | Should -Be 1
     }
 
     It 'no-match returns empty' {
-        $results = @(_claude_complete_sessions -WordToComplete 'zzz')
+        $results = @(_ClaudeCompleteSessions -WordToComplete 'zzz')
         $results.Count | Should -Be 0
     }
 
     It 'tooltip contains message text' {
-        $results = _claude_complete_sessions -WordToComplete 'aaa'
+        $results = _ClaudeCompleteSessions -WordToComplete 'aaa'
         $results[0].ToolTip | Should -Be 'Fix the login bug'
     }
 
     It 'no user message falls back to (session)' {
-        $results = _claude_complete_sessions -WordToComplete 'ddd'
+        $results = _ClaudeCompleteSessions -WordToComplete 'ddd'
         $results[0].ToolTip | Should -Be '(session)'
     }
 
     It 'long message is truncated in list text' {
-        $results = _claude_complete_sessions -WordToComplete 'eee'
+        $results = _ClaudeCompleteSessions -WordToComplete 'eee'
         $ellipsis = [char]0x2026
         $results[0].ListItemText | Should -BeLike "*$ellipsis"
         $results[0].ListItemText.Length | Should -BeLessThan ($results[0].ToolTip.Length + 40)
     }
 
     It 'long message tooltip contains full text' {
-        $results = _claude_complete_sessions -WordToComplete 'eee'
+        $results = _ClaudeCompleteSessions -WordToComplete 'eee'
         $results[0].ToolTip | Should -Be 'Refactor the entire authentication module to use OAuth2 with PKCE flow'
     }
 }

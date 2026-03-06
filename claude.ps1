@@ -1,14 +1,14 @@
 # PowerShell completion for the claude CLI (Claude Code)
 # https://github.com/anthropics/claude-code
 
-function global:_claude_version {
+function global:_ClaudeVersion {
     $output = claude --version 2>$null
     if ($output) {
         ($output -split '\s')[0]
     }
 }
 
-function global:_claude_cache_base {
+function global:_ClaudeCacheBase {
     if ($env:XDG_CACHE_HOME) {
         $env:XDG_CACHE_HOME
     } elseif ($PSVersionTable.PSVersion.Major -le 5 -or $IsWindows) {
@@ -18,41 +18,41 @@ function global:_claude_cache_base {
     }
 }
 
-function global:_claude_cache_dir {
-    $version = _claude_version
-    $base = _claude_cache_base
+function global:_ClaudeCacheDir {
+    $version = _ClaudeVersion
+    $base = _ClaudeCacheBase
     Join-Path (Join-Path (Join-Path $base 'claude-code-completion') 'powershell') $version
 }
 
-function global:_claude_ensure_cache {
-    $dir = _claude_cache_dir
+function global:_ClaudeEnsureCache {
+    $dir = _ClaudeCacheDir
     if (-not (Test-Path $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
 }
 
-function global:_claude_cleanup_old_cache {
-    $baseDir = Join-Path (Join-Path (_claude_cache_base) 'claude-code-completion') 'powershell'
+function global:_ClaudeCleanupOldCache {
+    $baseDir = Join-Path (Join-Path (_ClaudeCacheBase) 'claude-code-completion') 'powershell'
 
     if (-not (Test-Path $baseDir)) { return }
 
-    $currentVersion = _claude_version
+    $currentVersion = _ClaudeVersion
     Get-ChildItem -Path $baseDir -Directory | Where-Object {
         $_.Name -ne $currentVersion
     } | Remove-Item -Recurse -Force
 }
 
-function global:_claude_build_cache {
-    $cacheDir = _claude_cache_dir
+function global:_ClaudeBuildCache {
+    $cacheDir = _ClaudeCacheDir
     New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
 
     # Parse root level
     $helpOutput = claude --help 2>$null
     $helpLines = @($helpOutput -split "`n")
     Set-Content -Path (Join-Path $cacheDir '_root_help') -Value $helpOutput
-    _claude_parse_flags -HelpLines $helpLines | Set-Content -Path (Join-Path $cacheDir '_root_flags')
-    _claude_parse_flags_with_args -HelpLines $helpLines | Set-Content -Path (Join-Path $cacheDir '_root_flags_with_args')
-    $subcommands = @(_claude_parse_subcommands -HelpLines $helpLines)
+    _ClaudeParseFlags -HelpLines $helpLines | Set-Content -Path (Join-Path $cacheDir '_root_flags')
+    _ClaudeParseFlagsWithArgs -HelpLines $helpLines | Set-Content -Path (Join-Path $cacheDir '_root_flags_with_args')
+    $subcommands = @(_ClaudeParseSubcommands -HelpLines $helpLines)
     $subcommands | Set-Content -Path (Join-Path $cacheDir '_root_subcommands')
 
     # Parse each subcommand
@@ -61,15 +61,15 @@ function global:_claude_build_cache {
         $subHelp = claude $subcmd --help 2>$null
         if (-not $subHelp) { continue }
         $subHelpLines = @($subHelp -split "`n")
-        _claude_parse_flags -HelpLines $subHelpLines | Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags")
-        _claude_parse_flags_with_args -HelpLines $subHelpLines | Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags_with_args")
-        _claude_parse_subcommands -HelpLines $subHelpLines | Set-Content -Path (Join-Path $cacheDir "${subcmd}_subcommands")
+        _ClaudeParseFlags -HelpLines $subHelpLines | Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags")
+        _ClaudeParseFlagsWithArgs -HelpLines $subHelpLines | Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags_with_args")
+        _ClaudeParseSubcommands -HelpLines $subHelpLines | Set-Content -Path (Join-Path $cacheDir "${subcmd}_subcommands")
     }
 
-    _claude_cleanup_old_cache
+    _ClaudeCleanupOldCache
 }
 
-function global:_claude_parse_flags {
+function global:_ClaudeParseFlags {
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
         if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)') {
@@ -81,7 +81,7 @@ function global:_claude_parse_flags {
     }
 }
 
-function global:_claude_parse_flags_with_args {
+function global:_ClaudeParseFlagsWithArgs {
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
         if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s+[<\[]') {
@@ -93,7 +93,7 @@ function global:_claude_parse_flags_with_args {
     }
 }
 
-function global:_claude_parse_subcommands {
+function global:_ClaudeParseSubcommands {
     param([string[]]$HelpLines)
     $inCommands = $false
     foreach ($line in $HelpLines) {
@@ -111,7 +111,7 @@ function global:_claude_parse_subcommands {
     }
 }
 
-$script:_claude_known_models = @(
+$script:_ClaudeKnownModels = @(
     'sonnet', 'opus', 'haiku',
     'claude-sonnet-4-5-20250514',
     'claude-sonnet-4-6',
@@ -120,13 +120,13 @@ $script:_claude_known_models = @(
     'claude-haiku-4-5-20251001'
 )
 
-function global:_claude_complete_flag_arg {
+function global:_ClaudeCompleteFlagArg {
     param([string]$Flag, [string]$WordToComplete)
 
     switch ($Flag) {
         '--model' {
-            $models = @($script:_claude_known_models)
-            $cacheDir = _claude_cache_dir
+            $models = @($script:_ClaudeKnownModels)
+            $cacheDir = _ClaudeCacheDir
             $helpFile = Join-Path $cacheDir '_root_help'
             if (Test-Path $helpFile) {
                 foreach ($line in Get-Content $helpFile) {
@@ -164,7 +164,7 @@ function global:_claude_complete_flag_arg {
                 }
         }
         { $_ -in '--resume', '-r' } {
-            _claude_complete_sessions -WordToComplete $WordToComplete
+            _ClaudeCompleteSessions -WordToComplete $WordToComplete
         }
         { $_ -in '--add-dir', '--plugin-dir' } {
             Get-ChildItem -Path "$WordToComplete*" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
@@ -186,7 +186,7 @@ function global:_claude_complete_flag_arg {
     }
 }
 
-function global:_claude_encoded_cwd {
+function global:_ClaudeEncodedCwd {
     # Encodes CWD to match Claude CLI's project directory naming.
     # Windows: C:\Users\foo → C--Users-foo (colon and backslashes become dashes)
     # Unix: /home/foo → -home-foo (slashes become dashes; colons preserved)
@@ -198,7 +198,7 @@ function global:_claude_encoded_cwd {
     }
 }
 
-function global:_claude_session_message {
+function global:_ClaudeSessionMessage {
     param([string]$FilePath)
     foreach ($line in Get-Content -Path $FilePath) {
         if ([string]::IsNullOrWhiteSpace($line)) { continue }
@@ -228,10 +228,10 @@ function global:_claude_session_message {
     }
 }
 
-function global:_claude_complete_sessions {
+function global:_ClaudeCompleteSessions {
     param([string]$WordToComplete)
 
-    $encodedCwd = _claude_encoded_cwd
+    $encodedCwd = _ClaudeEncodedCwd
     # $env:HOME is checked first for testability ($HOME is immutable after startup)
     $homeDir = if ($env:HOME) { $env:HOME } else { $HOME }
     $sessionDir = Join-Path (Join-Path (Join-Path $homeDir '.claude') 'projects') $encodedCwd
@@ -245,7 +245,7 @@ function global:_claude_complete_sessions {
     foreach ($file in $files) {
         $sessionId = $file.BaseName
         if ($sessionId -like "$WordToComplete*") {
-            $msg = _claude_session_message -FilePath $file.FullName
+            $msg = _ClaudeSessionMessage -FilePath $file.FullName
             if (-not $msg) { $msg = '(session)' }
             $listText = if ($msg.Length -gt 40) { $msg.Substring(0, 39) + [char]0x2026 } else { $msg }
             [System.Management.Automation.CompletionResult]::new(
@@ -258,7 +258,7 @@ function global:_claude_complete_sessions {
     }
 }
 
-function global:_claude_mcp_server_names {
+function global:_ClaudeMcpServerNames {
     $output = claude mcp list 2>$null
     if (-not $output) { return }
     foreach ($line in ($output -split "`n")) {
@@ -268,7 +268,7 @@ function global:_claude_mcp_server_names {
     }
 }
 
-function global:_claude_plugin_names {
+function global:_ClaudePluginNames {
     $output = claude plugin list --json 2>$null
     if (-not $output) { return }
     try {
@@ -279,19 +279,19 @@ function global:_claude_plugin_names {
     } catch {}
 }
 
-function global:_claude_complete_subcmd_arg {
+function global:_ClaudeCompleteSubcmdArg {
     param([string]$Subcmd, [string]$SubSubcmd, [string]$WordToComplete)
 
     $key = "$Subcmd/$SubSubcmd"
     switch ($key) {
         { $_ -in 'mcp/get', 'mcp/remove' } {
-            $names = @(_claude_mcp_server_names)
+            $names = @(_ClaudeMcpServerNames)
             $names | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
                 [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
             }
         }
         { $_ -in 'plugin/disable', 'plugin/enable', 'plugin/uninstall', 'plugin/remove' } {
-            $names = @(_claude_plugin_names)
+            $names = @(_ClaudePluginNames)
             $names | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
                 [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
             }
@@ -299,17 +299,17 @@ function global:_claude_complete_subcmd_arg {
     }
 }
 
-function global:_claude_complete {
+function global:_ClaudeComplete {
     param(
         [string]$WordToComplete,
         [string[]]$Elements
     )
 
-    $cacheDir = _claude_cache_dir
+    $cacheDir = _ClaudeCacheDir
 
     # Build cache if needed
     if (-not (Test-Path $cacheDir)) {
-        _claude_build_cache
+        _ClaudeBuildCache
     }
 
     # Find the subcommand (first non-flag element after 'claude')
@@ -344,7 +344,7 @@ function global:_claude_complete {
             Join-Path $cacheDir '_root_flags_with_args'
         }
         if ((Test-Path $flagsWithArgsFile) -and ((Get-Content $flagsWithArgsFile) -contains $prev)) {
-            _claude_complete_flag_arg -Flag $prev -WordToComplete $WordToComplete
+            _ClaudeCompleteFlagArg -Flag $prev -WordToComplete $WordToComplete
             return
         }
     }
@@ -373,7 +373,7 @@ function global:_claude_complete {
             }
         } elseif ($subSubcmd) {
             # Complete positional args for sub-subcommands
-            _claude_complete_subcmd_arg -Subcmd $subcmd -SubSubcmd $subSubcmd -WordToComplete $WordToComplete
+            _ClaudeCompleteSubcmdArg -Subcmd $subcmd -SubSubcmd $subSubcmd -WordToComplete $WordToComplete
         } else {
             # Complete sub-subcommands
             $subFile = Join-Path $cacheDir "${subcmd}_subcommands"
@@ -408,5 +408,5 @@ function global:_claude_complete {
 Register-ArgumentCompleter -CommandName claude -Native -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
     $elements = @($commandAst.CommandElements | ForEach-Object { $_.ToString() })
-    _claude_complete -WordToComplete $wordToComplete -Elements $elements
+    _ClaudeComplete -WordToComplete $wordToComplete -Elements $elements
 }

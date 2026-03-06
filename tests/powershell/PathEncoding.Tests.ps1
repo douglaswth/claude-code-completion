@@ -9,7 +9,7 @@ Describe 'Path encoding' {
         New-Item -ItemType Directory -Path $testDir -Force | Out-Null
         Push-Location $testDir
         try {
-            $result = _claude_encoded_cwd
+            $result = _ClaudeEncodedCwd
             $result | Should -Not -Match '[/\\]'
             $result | Should -BeLike '*-foo-bar'
         } finally {
@@ -18,7 +18,7 @@ Describe 'Path encoding' {
     }
 
     It 'encodes current directory without error' {
-        $result = _claude_encoded_cwd
+        $result = _ClaudeEncodedCwd
         $result | Should -Not -BeNullOrEmpty
     }
 }
