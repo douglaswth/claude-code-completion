@@ -50,10 +50,10 @@ function global:_ClaudeBuildCache {
     $helpOutput = claude --help 2>$null
     $helpLines = @($helpOutput -split "`n")
     Set-Content -Path (Join-Path $cacheDir '_root_help') -Value $helpOutput
-    _ClaudeParseFlags -HelpLines $helpLines | Set-Content -Path (Join-Path $cacheDir '_root_flags')
-    _ClaudeParseFlagsWithArgs -HelpLines $helpLines | Set-Content -Path (Join-Path $cacheDir '_root_flags_with_args')
+    Set-Content -Path (Join-Path $cacheDir '_root_flags') -Value @(_ClaudeParseFlags -HelpLines $helpLines)
+    Set-Content -Path (Join-Path $cacheDir '_root_flags_with_args') -Value @(_ClaudeParseFlagsWithArgs -HelpLines $helpLines)
     $subcommands = @(_ClaudeParseSubcommands -HelpLines $helpLines)
-    $subcommands | Set-Content -Path (Join-Path $cacheDir '_root_subcommands')
+    Set-Content -Path (Join-Path $cacheDir '_root_subcommands') -Value $subcommands
 
     # Parse each subcommand
     foreach ($subcmd in $subcommands) {
@@ -61,9 +61,9 @@ function global:_ClaudeBuildCache {
         $subHelp = claude $subcmd --help 2>$null
         if (-not $subHelp) { continue }
         $subHelpLines = @($subHelp -split "`n")
-        _ClaudeParseFlags -HelpLines $subHelpLines | Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags")
-        _ClaudeParseFlagsWithArgs -HelpLines $subHelpLines | Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags_with_args")
-        _ClaudeParseSubcommands -HelpLines $subHelpLines | Set-Content -Path (Join-Path $cacheDir "${subcmd}_subcommands")
+        Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags") -Value @(_ClaudeParseFlags -HelpLines $subHelpLines)
+        Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags_with_args") -Value @(_ClaudeParseFlagsWithArgs -HelpLines $subHelpLines)
+        Set-Content -Path (Join-Path $cacheDir "${subcmd}_subcommands") -Value @(_ClaudeParseSubcommands -HelpLines $subHelpLines)
     }
 
     _ClaudeCleanupOldCache

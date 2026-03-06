@@ -22,7 +22,16 @@ Options:
 
 Commands:
   auth                           Manage authentication
+  doctor                         Check health of auto-updater
   mcp                            Configure MCP servers
+HELP
+        ;;
+    "doctor --help")
+        cat << 'HELP'
+Usage: claude doctor [options]
+
+Options:
+  -h, --help        Display help
 HELP
         ;;
     "auth --help")
