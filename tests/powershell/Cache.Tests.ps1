@@ -6,14 +6,11 @@ BeforeAll {
 
 Describe 'Cache management' {
     BeforeEach {
-        $script:TestCacheDir = Join-Path ([System.IO.Path]::GetTempPath()) "claude-test-cache-$([guid]::NewGuid())"
+        $script:TestCacheDir = Join-Path $TestDrive "cache-$([guid]::NewGuid())"
         $env:XDG_CACHE_HOME = $script:TestCacheDir
     }
 
     AfterEach {
-        if (Test-Path $script:TestCacheDir) {
-            Remove-Item -Recurse -Force $script:TestCacheDir
-        }
         $env:XDG_CACHE_HOME = $null
     }
 
@@ -85,7 +82,7 @@ Describe 'Cache management' {
 
     Context '_claude_build_cache' {
         BeforeEach {
-            $script:TestCacheDir = Join-Path ([System.IO.Path]::GetTempPath()) "claude-test-cache-$([guid]::NewGuid())"
+            $script:TestCacheDir = Join-Path $TestDrive "build-cache-$([guid]::NewGuid())"
             $env:XDG_CACHE_HOME = $script:TestCacheDir
 
             New-MockClaude @{
@@ -135,9 +132,6 @@ Commands:
         }
 
         AfterEach {
-            if (Test-Path $script:TestCacheDir) {
-                Remove-Item -Recurse -Force $script:TestCacheDir
-            }
             $env:XDG_CACHE_HOME = $null
         }
 

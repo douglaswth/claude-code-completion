@@ -1,6 +1,12 @@
 BeforeAll {
     . $PSScriptRoot/TestHelper.ps1
     Initialize-ClaudeTests
+    New-DefaultMockClaude
+    $env:XDG_CACHE_HOME = $TestDrive
+}
+
+AfterAll {
+    $env:XDG_CACHE_HOME = $null
 }
 
 Describe 'Script skeleton' {

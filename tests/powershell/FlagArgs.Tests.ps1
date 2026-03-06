@@ -30,13 +30,10 @@ Commands:
         'mcp --help' = 'Usage: claude mcp'
     }
 
-    $env:XDG_CACHE_HOME = Join-Path ([System.IO.Path]::GetTempPath()) "claude-test-$([guid]::NewGuid())"
+    $env:XDG_CACHE_HOME = $TestDrive
 }
 
 AfterAll {
-    if ($env:XDG_CACHE_HOME -and (Test-Path $env:XDG_CACHE_HOME)) {
-        Remove-Item -Recurse -Force $env:XDG_CACHE_HOME
-    }
     $env:XDG_CACHE_HOME = $null
 }
 

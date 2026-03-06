@@ -3,10 +3,10 @@ BeforeAll {
     Initialize-ClaudeTests
     New-DefaultMockClaude
 
-    $env:XDG_CACHE_HOME = Join-Path ([System.IO.Path]::GetTempPath()) "claude-test-$([guid]::NewGuid())"
+    $env:XDG_CACHE_HOME = Join-Path $TestDrive 'cache'
 
     # Create fake session files
-    $script:MockHome = Join-Path ([System.IO.Path]::GetTempPath()) "claude-mock-home-$([guid]::NewGuid())"
+    $script:MockHome = Join-Path $TestDrive 'home'
     $script:OriginalHome = $HOME
     $env:HOME = $script:MockHome
 
@@ -62,10 +62,6 @@ BeforeAll {
 
 AfterAll {
     $env:HOME = $script:OriginalHome
-    if (Test-Path $script:MockHome) { Remove-Item -Recurse -Force $script:MockHome }
-    if ($env:XDG_CACHE_HOME -and (Test-Path $env:XDG_CACHE_HOME)) {
-        Remove-Item -Recurse -Force $env:XDG_CACHE_HOME
-    }
     $env:XDG_CACHE_HOME = $null
 }
 
