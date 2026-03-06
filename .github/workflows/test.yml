@@ -26,14 +26,11 @@ jobs:
           which bash
           bash --version | head -1
 
-      - name: Install bashunit
-        run: curl -s https://bashunit.typeddevs.com/install.sh | bash
-
       - name: Run tests
-        run: ./lib/bashunit tests/bash/
+        run: bash tests/bash/run-tests.sh
 
       - name: Run tests with coverage
-        run: ./lib/bashunit tests/bash/ --coverage --coverage-paths claude.bash
+        run: bash tests/bash/run-tests.sh --coverage
 
   powershell:
     runs-on: ${{ matrix.os }}

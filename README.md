@@ -106,14 +106,11 @@ Both shells have comprehensive test suites that use mock `claude` commands to av
 Tests use [bashunit](https://bashunit.typeddevs.com/) in `tests/bash/`:
 
 ```bash
-# Run all tests
-bashunit tests/bash/
-
-# Run a single test file
-bashunit tests/bash/completion_test.bash
+# Run all tests (installs bashunit automatically if needed)
+bash tests/bash/run-tests.sh
 
 # Run with coverage
-bashunit tests/bash/ --coverage --coverage-paths claude.bash
+bash tests/bash/run-tests.sh --coverage
 ```
 
 Shared test infrastructure lives in `tests/bash/bootstrap.bash`.
@@ -124,10 +121,7 @@ Tests use [Pester](https://pester.dev/) in `tests/powershell/`:
 
 ```powershell
 # Run all tests
-Invoke-Pester tests/powershell/ -Output Detailed
-
-# Run a single test file
-Invoke-Pester tests/powershell/Completion.Tests.ps1 -Output Detailed
+pwsh -File tests/powershell/Invoke-Tests.ps1
 
 # Run with coverage
 pwsh -File tests/powershell/Invoke-Tests.ps1 -Coverage
@@ -137,5 +131,5 @@ Shared test infrastructure lives in `tests/powershell/TestHelper.ps1`.
 
 ### Prerequisites
 
-- [bashunit](https://bashunit.typeddevs.com/installation) (for bash tests)
+- [bashunit](https://bashunit.typeddevs.com/installation) (for bash tests; auto-installed by `run-tests.sh` if not found)
 - [Pester](https://pester.dev/docs/introduction/installation) v5+ (for PowerShell tests)

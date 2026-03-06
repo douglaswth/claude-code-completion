@@ -25,14 +25,11 @@ Tests use mock `claude` commands to avoid requiring a real installation.
 Tests use [bashunit](https://bashunit.typeddevs.com/) in `tests/bash/`:
 
 ```bash
-# Run all tests
-bashunit tests/bash/
-
-# Run a single test file
-bashunit tests/bash/completion_test.bash
+# Run all tests (installs bashunit automatically if needed)
+bash tests/bash/run-tests.sh
 
 # Run with coverage
-bashunit tests/bash/ --coverage --coverage-paths claude.bash
+bash tests/bash/run-tests.sh --coverage
 ```
 
 Shared test infrastructure lives in `tests/bash/bootstrap.bash`.
@@ -43,10 +40,7 @@ Tests use [Pester](https://pester.dev/) v5+ in `tests/powershell/`:
 
 ```powershell
 # Run all tests
-Invoke-Pester tests/powershell/ -Output Detailed
-
-# Run a single test file
-Invoke-Pester tests/powershell/Completion.Tests.ps1 -Output Detailed
+pwsh -File tests/powershell/Invoke-Tests.ps1
 
 # Run with coverage
 pwsh -File tests/powershell/Invoke-Tests.ps1 -Coverage
