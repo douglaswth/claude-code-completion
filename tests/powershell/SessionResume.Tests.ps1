@@ -13,48 +13,50 @@ BeforeAll {
     $projDir = Join-Path (Join-Path (Join-Path $script:MockHome '.claude') 'projects') '-home-user-myproject'
     New-Item -ItemType Directory -Path $projDir -Force | Out-Null
 
-    # Session 1: older
+    # Session 1: oldest
+    $file = Join-Path $projDir 'aaaaaaaa-1111-1111-1111-111111111111.jsonl'
     @'
 {"type":"queue-operation","timestamp":"2026-02-01T10:00:00.000Z","sessionId":"aaaaaaaa-1111-1111-1111-111111111111"}
 {"type":"user","message":{"role":"user","content":[{"type":"text","text":"Fix the login bug"}]},"timestamp":"2026-02-01T10:00:01.000Z","sessionId":"aaaaaaaa-1111-1111-1111-111111111111"}
 {"type":"assistant","timestamp":"2026-02-01T10:00:05.000Z","sessionId":"aaaaaaaa-1111-1111-1111-111111111111"}
-'@ | Set-Content (Join-Path $projDir 'aaaaaaaa-1111-1111-1111-111111111111.jsonl')
-
-    Start-Sleep -Seconds 1
+'@ | Set-Content $file
+    (Get-Item $file).LastWriteTime = [datetime]'2026-02-01'
 
     # Session 2: newer, with IDE metadata in first user message
+    $file = Join-Path $projDir 'bbbbbbbb-2222-2222-2222-222222222222.jsonl'
     @'
 {"type":"queue-operation","timestamp":"2026-03-01T15:00:00.000Z","sessionId":"bbbbbbbb-2222-2222-2222-222222222222"}
 {"type":"user","message":{"role":"user","content":[{"type":"text","text":"<ide_opened_file>Some IDE stuff</ide_opened_file>"}]},"timestamp":"2026-03-01T15:00:01.000Z","sessionId":"bbbbbbbb-2222-2222-2222-222222222222"}
 {"type":"user","message":{"role":"user","content":[{"type":"text","text":"Add the new feature"}]},"timestamp":"2026-03-01T15:00:02.000Z","sessionId":"bbbbbbbb-2222-2222-2222-222222222222"}
 {"type":"assistant","timestamp":"2026-03-01T15:00:10.000Z","sessionId":"bbbbbbbb-2222-2222-2222-222222222222"}
-'@ | Set-Content (Join-Path $projDir 'bbbbbbbb-2222-2222-2222-222222222222.jsonl')
-
-    Start-Sleep -Seconds 1
+'@ | Set-Content $file
+    (Get-Item $file).LastWriteTime = [datetime]'2026-03-01'
 
     # Session 3: string content (not array)
+    $file = Join-Path $projDir 'cccccccc-3333-3333-3333-333333333333.jsonl'
     @'
 {"type":"queue-operation","timestamp":"2026-04-01T12:00:00.000Z","sessionId":"cccccccc-3333-3333-3333-333333333333"}
 {"type":"user","message":{"role":"user","content":"Refactor the parser"},"timestamp":"2026-04-01T12:00:01.000Z","sessionId":"cccccccc-3333-3333-3333-333333333333"}
 {"type":"assistant","timestamp":"2026-04-01T12:00:05.000Z","sessionId":"cccccccc-3333-3333-3333-333333333333"}
-'@ | Set-Content (Join-Path $projDir 'cccccccc-3333-3333-3333-333333333333.jsonl')
-
-    Start-Sleep -Seconds 1
+'@ | Set-Content $file
+    (Get-Item $file).LastWriteTime = [datetime]'2026-04-01'
 
     # Session 4: no user message (only queue-operation and assistant)
+    $file = Join-Path $projDir 'dddddddd-4444-4444-4444-444444444444.jsonl'
     @'
 {"type":"queue-operation","timestamp":"2026-05-01T09:00:00.000Z","sessionId":"dddddddd-4444-4444-4444-444444444444"}
 {"type":"assistant","timestamp":"2026-05-01T09:00:05.000Z","sessionId":"dddddddd-4444-4444-4444-444444444444"}
-'@ | Set-Content (Join-Path $projDir 'dddddddd-4444-4444-4444-444444444444.jsonl')
-
-    Start-Sleep -Seconds 1
+'@ | Set-Content $file
+    (Get-Item $file).LastWriteTime = [datetime]'2026-05-01'
 
     # Session 5: long message (over 40 characters)
+    $file = Join-Path $projDir 'eeeeeeee-5555-5555-5555-555555555555.jsonl'
     @'
 {"type":"queue-operation","timestamp":"2026-06-01T08:00:00.000Z","sessionId":"eeeeeeee-5555-5555-5555-555555555555"}
 {"type":"user","message":{"role":"user","content":"Refactor the entire authentication module to use OAuth2 with PKCE flow"},"timestamp":"2026-06-01T08:00:01.000Z","sessionId":"eeeeeeee-5555-5555-5555-555555555555"}
 {"type":"assistant","timestamp":"2026-06-01T08:00:10.000Z","sessionId":"eeeeeeee-5555-5555-5555-555555555555"}
-'@ | Set-Content (Join-Path $projDir 'eeeeeeee-5555-5555-5555-555555555555.jsonl')
+'@ | Set-Content $file
+    (Get-Item $file).LastWriteTime = [datetime]'2026-06-01'
 
     # Override _claude_encoded_cwd to match our fake project
     function global:_claude_encoded_cwd { '-home-user-myproject' }
