@@ -17,7 +17,7 @@ Options:
   --debug-file <file>            Debug output file
   --effort <level>               Effort level (low, medium, high)
   --input-format <format>        Input format (choices: "text", "stream-json")
-  --model <model>                Model for session
+  --model <model>                Model for session (default: 'claude-test-9-99').
   --output-format <format>       Output format (choices: "text", "json", "stream-json")
   --permission-mode <mode>       Permission mode (choices: "acceptEdits", "bypassPermissions", "default", "dontAsk", "plan")
   --plugin-dir <directory>       Plugin directory
@@ -86,6 +86,13 @@ function test_input_format_completes_choices() {
     result="$(simulate_completion "claude --input-format ")"
     assert_contains "text" "$result"
     assert_contains "stream-json" "$result"
+}
+
+function test_model_extracts_ids_from_help_without_trailing_punctuation() {
+    local result
+    result="$(simulate_completion "claude --model ")"
+    assert_contains "claude-test-9-99" "$result"
+    assert_not_contains "claude-test-9-99')" "$result"
 }
 
 function test_model_partial_input_filters() {

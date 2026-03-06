@@ -4,37 +4,53 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Shell completion for the `claude` CLI (Claude Code). Currently provides bash tab-completion.
+Shell completion for the `claude` CLI (Claude Code). Provides bash and PowerShell tab-completion.
 
 ## Architecture
 
-Single-file bash completion script (`claude.bash`) with:
+Two single-file completion scripts (`claude.bash` and `claude.ps1`) sharing the same design:
 - Dynamic help parsing — extracts flags and subcommands from `claude --help` at completion time
-- Version-based caching at `$XDG_CACHE_HOME/claude-code-completion/bash/<version>/`
+- Version-based caching per CLI version; old versions are cleaned up automatically
 - Smart completions for flag arguments (models, permission modes, session IDs with message previews, etc.)
 - MCP server and plugin name completion for relevant subcommands
-- Optional `jq` dependency for session JSONL parsing, with grep/sed fallback
+
+Bash-specific: optional `jq` dependency for session JSONL parsing, with grep/sed fallback. PowerShell-specific: rich tooltips on completions, built-in JSON parsing via `ConvertFrom-Json`.
 
 ## Testing
 
-Tests use [bashunit](https://bashunit.typeddevs.com/) in `tests/`:
+Tests use mock `claude` commands to avoid requiring a real installation.
+
+### Bash
+
+Tests use [bashunit](https://bashunit.typeddevs.com/) in `tests/bash/`:
 
 ```bash
-# Run all tests
-bashunit tests/
-
-# Run a single test file
-bashunit tests/completion_test.bash
+# Run all tests (installs bashunit automatically if needed)
+bash tests/bash/run-tests.sh
 
 # Run with coverage
-bashunit tests/ --coverage --coverage-paths claude.bash
+bash tests/bash/run-tests.sh --coverage
 ```
 
-Tests use mock `claude` commands to avoid requiring a real installation. Shared test infrastructure lives in `tests/bootstrap.bash`.
+Shared test infrastructure lives in `tests/bash/bootstrap.bash`.
+
+### PowerShell
+
+Tests use [Pester](https://pester.dev/) v5+ in `tests/powershell/`:
+
+```powershell
+# Run all tests
+pwsh -File tests/powershell/Invoke-Tests.ps1
+
+# Run with coverage
+pwsh -File tests/powershell/Invoke-Tests.ps1 -Coverage
+```
+
+Shared test infrastructure lives in `tests/powershell/TestHelper.ps1`.
 
 ### Coverage Review
 
-After adding or changing tests, run coverage and walk through each uncovered area one at a time with the user. For each area, show the uncovered line(s) marked with `✗` in context of the surrounding source code, explain why it's uncovered, and categorize it:
+After adding or changing tests in **either** shell, run coverage for **both** shells and walk through each uncovered area one at a time with the user. For each area, show the uncovered line(s) marked with `✗` in context of the surrounding source code, explain why it's uncovered, and categorize it:
 
 - **False negative** — coverage instrumentation artifact (e.g., `done < file` redirects, string contents passed to other programs, file-scope declarations)
 - **Worth testing** — real uncovered logic that should have a test; add to a todo list
@@ -44,7 +60,8 @@ Wait for the user's input on each area before moving to the next.
 
 ### Prerequisites
 
-- [bashunit](https://bashunit.typeddevs.com/installation)
+- [bashunit](https://bashunit.typeddevs.com/installation) (for bash tests)
+- [Pester](https://pester.dev/docs/introduction/installation) v5+ (for PowerShell tests)
 
 ## Documentation
 

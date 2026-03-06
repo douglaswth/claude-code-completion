@@ -3,7 +3,7 @@
 # --- Shared test infrastructure for bashunit ---
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Create a minimal mock claude command in the given directory.
 # Writes a script that handles --version and a basic --help.

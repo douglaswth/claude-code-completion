@@ -26,11 +26,36 @@ jobs:
           which bash
           bash --version | head -1
 
-      - name: Install bashunit
-        run: curl -s https://bashunit.typeddevs.com/install.sh | bash
-
       - name: Run tests
-        run: ./lib/bashunit tests/
+        run: bash tests/bash/run-tests.sh
 
       - name: Run tests with coverage
-        run: ./lib/bashunit tests/ --coverage --coverage-paths claude.bash
+        run: bash tests/bash/run-tests.sh --coverage
+
+  powershell:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        shell: [pwsh]
+        include:
+          - os: windows-latest
+            shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pester
+        shell: pwsh
+        run: |
+          & ${{ matrix.shell }} -Command 'Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser -SkipPublisherCheck'
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          & ${{ matrix.shell }} -ExecutionPolicy Bypass -File tests/powershell/Invoke-Tests.ps1
+
+      - name: Run tests with coverage
+        shell: pwsh
+        run: |
+          & ${{ matrix.shell }} -ExecutionPolicy Bypass -File tests/powershell/Invoke-Tests.ps1 -Coverage

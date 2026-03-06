@@ -108,6 +108,13 @@ function test_plugin_uninstall_completes_plugin_names() {
     assert_contains "superpowers" "$result"
 }
 
+function test_sub_subcommand_found_after_intervening_flags() {
+    local result
+    result="$(simulate_completion "claude mcp --scope user get ")"
+    assert_contains "my-sentry" "$result"
+    assert_contains "my-github" "$result"
+}
+
 function test_subcommand_flag_with_args_completes() {
     local result
     result="$(simulate_completion "claude mcp add --scope $COMP_DIR/")"

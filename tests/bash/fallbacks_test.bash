@@ -37,6 +37,13 @@ SESSION
 {"type":"assistant","timestamp":"2026-03-01T15:00:10.000Z","sessionId":"bbb"}
 SESSION
 
+    # Session 3: string content (not array)
+    cat > "$SESSION_DIR/session3.jsonl" << 'SESSION'
+{"type":"queue-operation","timestamp":"2026-04-01T12:00:00.000Z","sessionId":"ccc"}
+{"type":"user","message":{"role":"user","content":"Refactor the parser"},"timestamp":"2026-04-01T12:00:01.000Z","sessionId":"ccc"}
+{"type":"assistant","timestamp":"2026-04-01T12:00:05.000Z","sessionId":"ccc"}
+SESSION
+
     # Build a PATH with jq removed for fallback tests
     NO_JQ_PATH=""
     local _shadow_idx=0
@@ -81,6 +88,13 @@ function test_session_message_jq_skips_ide_metadata() {
     assert_same "Add the new feature" "$result"
 }
 
+function test_session_message_jq_extracts_string_content() {
+    if ! command -v jq &>/dev/null; then skip; return; fi
+    local result
+    result="$(_claude_session_message_jq "$SESSION_DIR/session3.jsonl")"
+    assert_same "Refactor the parser" "$result"
+}
+
 # --- grep fallback tests ---
 
 function test_session_message_grep_extracts_simple_message() {
@@ -93,6 +107,12 @@ function test_session_message_grep_skips_ide_metadata() {
     local result
     result="$(_claude_session_message_grep "$SESSION_DIR/session2.jsonl")"
     assert_same "Add the new feature" "$result"
+}
+
+function test_session_message_grep_extracts_string_content() {
+    local result
+    result="$(_claude_session_message_grep "$SESSION_DIR/session3.jsonl")"
+    assert_same "Refactor the parser" "$result"
 }
 
 # --- plugin names with jq ---

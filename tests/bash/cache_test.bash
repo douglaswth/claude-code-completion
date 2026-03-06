@@ -25,6 +25,13 @@ function test_cache_dir_returns_correct_path_prefix() {
     assert_contains "$XDG_CACHE_HOME/claude-code-completion/bash/" "$cache_dir"
 }
 
+function test_cache_dir_falls_back_to_home_cache_when_xdg_unset() {
+    unset XDG_CACHE_HOME
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_contains "$HOME/.cache/claude-code-completion/bash/" "$cache_dir"
+}
+
 function test_cache_dir_includes_version_component() {
     local cache_dir version_part
     cache_dir="$(_claude_cache_dir)"
