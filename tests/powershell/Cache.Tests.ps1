@@ -29,6 +29,16 @@ Describe 'Cache management' {
             $dir | Should -BeLike "$script:TestCacheDir*"
         }
 
+        It 'falls back to platform default when XDG_CACHE_HOME is unset' {
+            $env:XDG_CACHE_HOME = $null
+            $dir = _claude_cache_dir
+            if ($PSVersionTable.PSVersion.Major -le 5 -or $IsWindows) {
+                $dir | Should -BeLike "$env:LOCALAPPDATA*"
+            } else {
+                $dir | Should -BeLike "*/.cache/*"
+            }
+        }
+
         It 'includes powershell subdirectory' {
             $dir = _claude_cache_dir
             $dir | Should -BeLike '*powershell*'

@@ -147,13 +147,17 @@ _claude_session_message_jq() {
 
 _claude_session_message_grep() {
     # Extract first real user message using grep/sed fallback
-    local file="$1"
-    grep '"type":"user"' "$file" \
+    local file="$1" line msg
+    line=$(grep '"type":"user"' "$file" \
         | grep -v '<ide_' \
         | grep -v '<command-' \
-        | head -1 \
-        | sed -n 's/.*"text":"\([^"]*\)".*/\1/p' \
-        | head -1
+        | head -1)
+    [[ -z "$line" ]] && return
+    # Try array form first: content:[{"type":"text","text":"..."}]
+    msg=$(echo "$line" | sed -n 's/.*"text":"\([^"]*\)".*/\1/p' | head -1)
+    # Fall back to string form: content:"..."
+    [[ -z "$msg" ]] && msg=$(echo "$line" | sed -n 's/.*"content":"\([^"]*\)".*/\1/p' | head -1)
+    echo "$msg"
 }
 
 _claude_session_message() {

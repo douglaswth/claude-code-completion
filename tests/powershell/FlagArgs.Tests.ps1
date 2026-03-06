@@ -86,3 +86,34 @@ Describe 'Flag argument completion' {
         $results | Should -Not -Contain 'opus'
     }
 }
+
+Describe 'Filesystem flag completion' {
+    BeforeAll {
+        $script:CompDir = (Get-Item $TestDrive).FullName
+        New-Item -ItemType Directory -Path (Join-Path $script:CompDir 'subdir_one') -Force | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $script:CompDir 'subdir_two') -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $script:CompDir 'file_alpha.txt') -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $script:CompDir 'file_beta.log') -Force | Out-Null
+    }
+
+    It 'add-dir completes directories only' {
+        $results = Get-CompletionText "claude --add-dir $($script:CompDir)/"
+        $results | Should -Contain (Join-Path $script:CompDir 'subdir_one')
+        $results | Should -Contain (Join-Path $script:CompDir 'subdir_two')
+        $results | Should -Not -Contain (Join-Path $script:CompDir 'file_alpha.txt')
+    }
+
+    It 'plugin-dir completes directories only' {
+        $results = Get-CompletionText "claude --plugin-dir $($script:CompDir)/"
+        $results | Should -Contain (Join-Path $script:CompDir 'subdir_one')
+        $results | Should -Contain (Join-Path $script:CompDir 'subdir_two')
+        $results | Should -Not -Contain (Join-Path $script:CompDir 'file_alpha.txt')
+    }
+
+    It 'debug-file completes files only' {
+        $results = Get-CompletionText "claude --debug-file $($script:CompDir)/"
+        $results | Should -Contain (Join-Path $script:CompDir 'file_alpha.txt')
+        $results | Should -Contain (Join-Path $script:CompDir 'file_beta.log')
+        $results | Should -Not -Contain (Join-Path $script:CompDir 'subdir_one')
+    }
+}

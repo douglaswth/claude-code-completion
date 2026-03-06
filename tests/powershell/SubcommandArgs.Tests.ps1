@@ -96,3 +96,24 @@ Describe 'Subcommand flags' {
         $results | Should -Contain '--scope'
     }
 }
+
+Describe 'Sub-subcommand detection with intervening flags' {
+    It 'finds sub-subcommand after flags' {
+        $results = Get-CompletionText 'claude mcp --scope user get '
+        $results | Should -Contain 'my-sentry'
+        $results | Should -Contain 'my-github'
+    }
+}
+
+Describe 'Subcommand flag with args' {
+    BeforeAll {
+        $script:CompDir = (Get-Item $TestDrive).FullName
+        New-Item -ItemType File -Path (Join-Path $script:CompDir 'config.json') -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $script:CompDir 'data.txt') -Force | Out-Null
+    }
+
+    It 'subcommand flag with args completes files' {
+        $results = Get-CompletionText "claude mcp add --scope $($script:CompDir)/"
+        $results | Should -Contain (Join-Path $script:CompDir 'config.json')
+    }
+}

@@ -29,6 +29,13 @@ SESSION
 {"type":"assistant","timestamp":"2026-03-01T15:00:10.000Z","sessionId":"bbbbbbbb-2222-2222-2222-222222222222"}
 SESSION
 
+    # Session 3: no user message (only queue-operation and assistant)
+    sleep 1
+    cat > "$PROJ_DIR/dddddddd-4444-4444-4444-444444444444.jsonl" << 'SESSION'
+{"type":"queue-operation","timestamp":"2026-05-01T09:00:00.000Z","sessionId":"dddddddd-4444-4444-4444-444444444444"}
+{"type":"assistant","timestamp":"2026-05-01T09:00:05.000Z","sessionId":"dddddddd-4444-4444-4444-444444444444"}
+SESSION
+
     source_claude_bash
 
     # Override _claude_encoded_cwd to match our fake project
@@ -63,10 +70,10 @@ function tear_down_after_script() {
     rm -rf "$XDG_CACHE_HOME" "$MOCK_BIN" "$MOCK_HOME" "$SHADOW_BASE"
 }
 
-function test_complete_sessions_finds_both_sessions() {
+function test_complete_sessions_finds_all_sessions() {
     COMPREPLY=()
     _claude_complete_sessions ""
-    assert_equals "2" "${#COMPREPLY[@]}"
+    assert_equals "3" "${#COMPREPLY[@]}"
 }
 
 function test_session_1_uuid_present() {
@@ -87,6 +94,13 @@ function test_partial_uuid_filters() {
     COMPREPLY=()
     _claude_complete_sessions "aaa"
     assert_equals "1" "${#COMPREPLY[@]}"
+}
+
+function test_no_user_message_falls_back_to_session_label() {
+    COMPREPLY=()
+    _claude_complete_sessions ""
+    local result="${COMPREPLY[*]}"
+    assert_contains "(session)" "$result"
 }
 
 # --- End-to-end tests via simulate_completion ---
