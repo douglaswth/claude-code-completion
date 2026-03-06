@@ -21,4 +21,20 @@ Describe 'Path encoding' {
         $result = _ClaudeEncodedCwd
         $result | Should -Not -BeNullOrEmpty
     }
+
+    It 'resolves symlinks in path' -Skip:($IsWindows -or $PSVersionTable.PSVersion.Major -le 5) {
+        $realDir = Join-Path (Join-Path $TestDrive 'real') 'project'
+        $linkDir = Join-Path $TestDrive 'link'
+        New-Item -ItemType Directory -Path $realDir -Force | Out-Null
+        New-Item -ItemType SymbolicLink -Path $linkDir -Target (Join-Path $TestDrive 'real') | Out-Null
+        Push-Location (Join-Path $linkDir 'project')
+        try {
+            $result = _ClaudeEncodedCwd
+            $result | Should -BeLike '*-real-project'
+            $result | Should -Not -BeLike '*-link-*'
+        } finally {
+            Pop-Location
+            Remove-Item $linkDir -Force
+        }
+    }
 }

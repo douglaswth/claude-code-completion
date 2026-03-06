@@ -161,3 +161,44 @@ Describe 'End-to-end resume completion' {
         $results.Count | Should -Be 0
     }
 }
+
+Describe 'Resume completion with symlinked CWD' -Skip:($IsWindows -or $PSVersionTable.PSVersion.Major -le 5) {
+    BeforeAll {
+        # Create a real directory and a symlink to it
+        $realDir = Join-Path (Join-Path $TestDrive 'real') 'myproject'
+        $linkDir = Join-Path $TestDrive 'link'
+        New-Item -ItemType Directory -Path $realDir -Force | Out-Null
+        New-Item -ItemType SymbolicLink -Path $linkDir -Target (Join-Path $TestDrive 'real') | Out-Null
+
+        # Encode the REAL (fully resolved) path the way Claude CLI would.
+        # Must resolve $realDir itself since $TestDrive may contain symlinks
+        # (e.g. /var -> /private/var on macOS).
+        $realEncoded = (_ClaudeResolveSymlinks $realDir).Replace('/', '-')
+        $projDir = Join-Path (Join-Path (Join-Path $script:MockHome '.claude') 'projects') $realEncoded
+        New-Item -ItemType Directory -Path $projDir -Force | Out-Null
+
+        $file = Join-Path $projDir 'ffffffff-6666-6666-6666-666666666666.jsonl'
+        '{"type":"user","message":{"role":"user","content":"Symlink test"},"timestamp":"2026-04-01T10:00:00.000Z","sessionId":"ffffffff-6666-6666-6666-666666666666"}' |
+            Set-Content $file
+
+        # Re-source to get the real _ClaudeEncodedCwd (not the test override)
+        Initialize-ClaudeTests
+        New-DefaultMockClaude
+    }
+
+    AfterAll {
+        Remove-Item $linkDir -Force -ErrorAction SilentlyContinue
+        # Restore the test override
+        function global:_ClaudeEncodedCwd { '-home-user-myproject' }
+    }
+
+    It 'finds sessions when CWD is a symlink' {
+        Push-Location (Join-Path $linkDir 'myproject')
+        try {
+            $results = @(_ClaudeCompleteSessions -WordToComplete '')
+            $results.CompletionText | Should -Contain 'ffffffff-6666-6666-6666-666666666666'
+        } finally {
+            Pop-Location
+        }
+    }
+}

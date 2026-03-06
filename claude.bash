@@ -127,7 +127,10 @@ _claude_build_cache() {
 
 _claude_encoded_cwd() {
     # Encode current directory the way Claude does: replace / with -
-    local cwd="${PWD}"
+    # Use pwd -P to resolve symlinks (e.g. /home -> /usr/home on FreeBSD)
+    # so the path matches what the Claude CLI stores in ~/.claude/projects.
+    local cwd
+    cwd="$(pwd -P)"
     echo "${cwd//\//-}"
 }
 
