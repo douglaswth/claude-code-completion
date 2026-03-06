@@ -129,3 +129,62 @@ function test_e2e_resume_no_match_returns_empty() {
     result="$(simulate_completion "claude --resume zzz")"
     assert_empty "$result"
 }
+
+# --- Symlink resolution tests ---
+
+function test_encoded_cwd_resolves_symlinks() {
+    # Simulate a symlinked working directory (e.g. /home -> /usr/home on FreeBSD).
+    # _claude_encoded_cwd should use the real path, not the symlink.
+    local real_dir="$MOCK_HOME/real/project"
+    local link_dir="$MOCK_HOME/link"
+    mkdir -p "$real_dir"
+    ln -s "$MOCK_HOME/real" "$link_dir"
+
+    # Re-source so we get the unpatched _claude_encoded_cwd
+    source_claude_bash
+
+    local result
+    result="$(cd "$link_dir/project" && _claude_encoded_cwd)"
+    assert_contains "-real-project" "$result"
+    assert_not_contains "-link-" "$result"
+
+    rm -rf "$real_dir" "$link_dir"
+
+    # Restore the test override for subsequent tests
+    eval '_claude_encoded_cwd() { echo "-home-user-myproject"; }'
+}
+
+function test_e2e_resume_works_with_symlinked_cwd() {
+    # Create a real directory and a symlink to it, with sessions stored under
+    # the real path (as Claude CLI does). Verify completions work from the
+    # symlinked path.
+    local real_dir="$MOCK_HOME/real/myproject"
+    local link_dir="$MOCK_HOME/link"
+    mkdir -p "$real_dir"
+    ln -s "$MOCK_HOME/real" "$link_dir"
+
+    # Encode the REAL (fully resolved) path the way Claude CLI would.
+    # Must resolve MOCK_HOME itself since mktemp paths may contain symlinks
+    # (e.g. /var -> /private/var on macOS).
+    local resolved_real_dir
+    resolved_real_dir="$(cd "$real_dir" && pwd -P)"
+    local real_encoded="${resolved_real_dir//\//-}"
+    local proj_dir="$MOCK_HOME/.claude/projects/$real_encoded"
+    mkdir -p "$proj_dir"
+    cat > "$proj_dir/cccccccc-3333-3333-3333-333333333333.jsonl" << 'SESSION'
+{"type":"user","message":{"role":"user","content":"Symlink test"},"timestamp":"2026-04-01T10:00:00.000Z","sessionId":"cccccccc-3333-3333-3333-333333333333"}
+SESSION
+
+    # Re-source to get the real _claude_encoded_cwd (not the test override)
+    source_claude_bash
+
+    # Simulate being in the symlinked directory
+    local result
+    result="$(cd "$link_dir/myproject" && _claude_complete_sessions "" && echo "${COMPREPLY[*]}")"
+    assert_contains "cccccccc-3333-3333-3333-333333333333" "$result"
+
+    rm -rf "$real_dir" "$link_dir" "$proj_dir"
+
+    # Restore the test override for subsequent tests
+    eval '_claude_encoded_cwd() { echo "-home-user-myproject"; }'
+}

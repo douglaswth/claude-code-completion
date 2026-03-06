@@ -186,15 +186,37 @@ function global:_ClaudeCompleteFlagArg {
     }
 }
 
+function global:_ClaudeResolveSymlinks {
+    # Resolve symlinks in a Unix path by walking each component.
+    # Needed because $pwd.Path preserves symlinks (e.g. /home -> /usr/home on
+    # FreeBSD) but the Claude CLI stores sessions under the real path.
+    param([string]$Path)
+    $parts = $Path.Split('/', [System.StringSplitOptions]::RemoveEmptyEntries)
+    $resolved = ''
+    foreach ($part in $parts) {
+        $resolved += "/$part"
+        $item = Get-Item -LiteralPath $resolved -ErrorAction SilentlyContinue
+        if ($item.LinkTarget) {
+            $target = $item.LinkTarget
+            if (-not [System.IO.Path]::IsPathRooted($target)) {
+                $parent = [System.IO.Path]::GetDirectoryName($resolved)
+                $target = [System.IO.Path]::GetFullPath(
+                    [System.IO.Path]::Combine($parent, $target))
+            }
+            $resolved = $target
+        }
+    }
+    return $resolved
+}
+
 function global:_ClaudeEncodedCwd {
     # Encodes CWD to match Claude CLI's project directory naming.
     # Windows: C:\Users\foo → C--Users-foo (colon and backslashes become dashes)
     # Unix: /home/foo → -home-foo (slashes become dashes; colons preserved)
-    $cwd = $pwd.Path
     if ($PSVersionTable.PSVersion.Major -le 5 -or $IsWindows) {
-        $cwd -replace '[:\\/]', '-'
+        $pwd.Path -replace '[:\\/]', '-'
     } else {
-        $cwd.Replace('/', '-')
+        (_ClaudeResolveSymlinks $pwd.Path).Replace('/', '-')
     }
 }
 
