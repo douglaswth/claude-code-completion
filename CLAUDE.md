@@ -67,6 +67,12 @@ Wait for the user's input on each area before moving to the next.
 
 When making changes that affect usage, testing, or installation instructions, update both `CLAUDE.md` and `README.md` to keep them in sync.
 
+## Releases
+
+Releases are cut by creating a GitHub release with a SemVer tag (e.g., `gh release create 1.0.1 --generate-notes`); GitHub creates the tag at the target commit if it doesn't exist. The `.github/workflows/release.yml` workflow then auto-attaches `claude.bash` and `claude.ps1` to the release.
+
+Tags use bare SemVer with no `v` prefix (e.g., `1.0.0`, not `v1.0.0`). The first release was cut as `v1.0.0`, but GitHub's tag immutability setting locked the tag before the release workflow could attach assets. Deleting `v1.0.0` did not free the name for reuse, so `1.0.0` was cut as the workaround — and all subsequent tags must match.
+
 ## Design Documents
 
 - `docs/plans/2026-03-02-bash-completion-design.md` — design decisions and rationale
