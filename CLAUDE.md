@@ -75,4 +75,8 @@ Tags use bare SemVer with no `v` prefix (e.g., `1.0.0`, not `v1.0.0`). The first
 
 ## Design Documents
 
+Design documents and implementation plans live in `docs/plans/`. **Start a feature branch before writing them** — the plan, the code it describes, and the corresponding tests all land via the same branch (and PR, if applicable). Plans should not be committed directly to `main`.
+
+Existing design documents:
+
 - `docs/plans/2026-03-02-bash-completion-design.md` — design decisions and rationale
