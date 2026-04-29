@@ -13,13 +13,18 @@ if ! declare -F _init_completion &>/dev/null; then
     }
 fi
 
+# Cache schema version. Bump on any change to bundled-flag data, sidecar
+# file format, or cache layout. Bumps invalidate existing caches for the
+# same CLI version.
+_CLAUDE_CACHE_VERSION=1
+
 _claude_version() {
     claude --version 2>/dev/null | head -1 | awk '{print $1}'
 }
 
 _claude_cache_dir() {
     local xdg_cache="${XDG_CACHE_HOME:-$HOME/.cache}"
-    echo "$xdg_cache/claude-code-completion/bash/$(_claude_version)"
+    echo "$xdg_cache/claude-code-completion/bash/$(_claude_version)-c${_CLAUDE_CACHE_VERSION}"
 }
 
 _claude_ensure_cache() {
@@ -31,17 +36,17 @@ _claude_ensure_cache() {
 _claude_cleanup_old_cache() {
     local xdg_cache="${XDG_CACHE_HOME:-$HOME/.cache}"
     local base_dir="$xdg_cache/claude-code-completion/bash"
-    local current_version
-    current_version="$(_claude_version)"
+    local current_key
+    current_key="$(_claude_version)-c${_CLAUDE_CACHE_VERSION}"
 
     [[ -d "$base_dir" ]] || return 0
 
     local dir
     for dir in "$base_dir"/*/; do
         [[ -d "$dir" ]] || continue
-        local dir_version
-        dir_version="$(basename "$dir")"
-        if [[ "$dir_version" != "$current_version" ]]; then
+        local dir_key
+        dir_key="$(basename "$dir")"
+        if [[ "$dir_key" != "$current_key" ]]; then
             rm -rf "$dir"
         fi
     done
