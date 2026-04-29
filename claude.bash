@@ -30,11 +30,11 @@ _CLAUDE_CACHE_VERSION=1
 _CLAUDE_EXTRA_FLAGS=()
 
 # Split a tab-separated extra-flag record into its fields.
-# Usage: _claude_parse_extra_flag "$record" scope name takes_arg arg_type desc
-_claude_parse_extra_flag() {
+# Usage: _claude_parse_extra_flag_record "$record" scope name takes_arg arg_type desc
+_claude_parse_extra_flag_record() {
     local record="$1"
-    local -n _scope="$2" _name="$3" _ta="$4" _at="$5" _desc="$6"
-    IFS=$'\t' read -r _scope _name _ta _at _desc <<< "$record"
+    local -n _scope="$2" _name="$3" _takes_arg="$4" _arg_type="$5" _desc="$6"
+    IFS=$'\t' read -r _scope _name _takes_arg _arg_type _desc <<< "$record"
 }
 
 _claude_version() {

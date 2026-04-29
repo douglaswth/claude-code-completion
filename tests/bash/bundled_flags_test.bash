@@ -24,10 +24,16 @@ function test_extra_flags_array_exists() {
     assert_successful_code "$?"
 }
 
+function test_extra_flags_is_indexed_array() {
+    local attrs
+    attrs="$(declare -p _CLAUDE_EXTRA_FLAGS 2>/dev/null)"
+    assert_matches '^declare -a ' "$attrs"
+}
+
 function test_parse_extra_flag_record_splits_five_fields() {
     local rec=$'_root\t--foo\t1\tdir\tExample description'
     local scope name takes_arg arg_type desc
-    _claude_parse_extra_flag "$rec" scope name takes_arg arg_type desc
+    _claude_parse_extra_flag_record "$rec" scope name takes_arg arg_type desc
     assert_equals "_root" "$scope"
     assert_equals "--foo" "$name"
     assert_equals "1" "$takes_arg"
@@ -38,14 +44,24 @@ function test_parse_extra_flag_record_splits_five_fields() {
 function test_parse_extra_flag_handles_choice_arg_type() {
     local rec=$'mcp\t--bar\t1\tchoice:a,b,c\tWith choices'
     local scope name takes_arg arg_type desc
-    _claude_parse_extra_flag "$rec" scope name takes_arg arg_type desc
+    _claude_parse_extra_flag_record "$rec" scope name takes_arg arg_type desc
     assert_equals "choice:a,b,c" "$arg_type"
 }
 
 function test_parse_extra_flag_handles_takes_arg_zero() {
     local rec=$'_root\t--baz\t0\tnone\tBoolean flag'
     local scope name takes_arg arg_type desc
-    _claude_parse_extra_flag "$rec" scope name takes_arg arg_type desc
+    _claude_parse_extra_flag_record "$rec" scope name takes_arg arg_type desc
     assert_equals "0" "$takes_arg"
     assert_equals "none" "$arg_type"
+}
+
+function test_parse_extra_flag_record_handles_empty_record() {
+    local scope name takes_arg arg_type desc
+    _claude_parse_extra_flag_record "" scope name takes_arg arg_type desc
+    assert_equals "" "$scope"
+    assert_equals "" "$name"
+    assert_equals "" "$takes_arg"
+    assert_equals "" "$arg_type"
+    assert_equals "" "$desc"
 }
