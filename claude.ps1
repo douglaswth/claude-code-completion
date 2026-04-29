@@ -1,6 +1,11 @@
 # PowerShell completion for the claude CLI (Claude Code)
 # https://github.com/anthropics/claude-code
 
+# Cache schema version. Bump on any change to bundled-flag data, sidecar
+# file format, or cache layout. Bumps invalidate existing caches for the
+# same CLI version.
+$script:ClaudeCacheVersion = 1
+
 function global:_ClaudeVersion {
     $output = claude --version 2>$null
     if ($output) {
@@ -21,7 +26,8 @@ function global:_ClaudeCacheBase {
 function global:_ClaudeCacheDir {
     $version = _ClaudeVersion
     $base = _ClaudeCacheBase
-    Join-Path (Join-Path (Join-Path $base 'claude-code-completion') 'powershell') $version
+    $key = "$version-c$($script:ClaudeCacheVersion)"
+    Join-Path (Join-Path (Join-Path $base 'claude-code-completion') 'powershell') $key
 }
 
 function global:_ClaudeEnsureCache {
@@ -36,9 +42,9 @@ function global:_ClaudeCleanupOldCache {
 
     if (-not (Test-Path $baseDir)) { return }
 
-    $currentVersion = _ClaudeVersion
+    $currentKey = "$(_ClaudeVersion)-c$($script:ClaudeCacheVersion)"
     Get-ChildItem -Path $baseDir -Directory | Where-Object {
-        $_.Name -ne $currentVersion
+        $_.Name -ne $currentKey
     } | Remove-Item -Recurse -Force
 }
 
