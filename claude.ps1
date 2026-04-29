@@ -117,10 +117,11 @@ function global:_ClaudeParseFlagDescriptions {
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
         if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s+.*?\s{2,}(\S.+)') {
-            "$($Matches[1])`t$($Matches[3])"
-            "$($Matches[2])`t$($Matches[3])"
+            $desc = $Matches[3].TrimEnd()
+            "$($Matches[1])`t$desc"
+            "$($Matches[2])`t$desc"
         } elseif ($line -match '^\s+(--[a-zA-Z][-a-zA-Z]*).*?\s{2,}(\S.+)') {
-            "$($Matches[1])`t$($Matches[2])"
+            "$($Matches[1])`t$($Matches[2].TrimEnd())"
         }
     }
 }
