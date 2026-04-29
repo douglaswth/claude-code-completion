@@ -62,6 +62,25 @@ Commands:
         }
     }
 
+    Context '_ClaudeParseFlagDescriptions' {
+        BeforeAll {
+            $descriptions = @(_ClaudeParseFlagDescriptions -HelpLines $helpLines)
+        }
+
+        It 'extracts description for short+long flag pair' {
+            $descriptions | Should -Contain "--continue`tContinue most recent conversation"
+            $descriptions | Should -Contain "-c`tContinue most recent conversation"
+        }
+
+        It 'extracts description for long-only flag' {
+            $descriptions | Should -Contain "--add-dir`tAdditional directories"
+        }
+
+        It 'does not include non-flag lines' {
+            ($descriptions | Where-Object { $_ -like 'prompt*' }) | Should -BeNullOrEmpty
+        }
+    }
+
     Context '_ClaudeParseSubcommands' {
         BeforeAll {
             $subcommands = @(_ClaudeParseSubcommands -HelpLines $helpLines)

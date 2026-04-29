@@ -83,10 +83,10 @@ Walk `$commandAst.CommandElements` to determine:
 | `claude mcp <TAB>` | Sub-subcommands from cache |
 | `claude mcp -<TAB>` | Subcommand flags from cache |
 | `claude --model <TAB>` | Model names (hardcoded + help-parsed) |
-| `claude --permission-mode <TAB>` | Known permission modes |
+| `claude --permission-mode <TAB>` | Known permission modes (incl. auto) |
 | `claude --output-format <TAB>` | text, json, stream-json |
 | `claude --input-format <TAB>` | text, stream-json |
-| `claude --effort <TAB>` | low, medium, high |
+| `claude --effort <TAB>` | low, medium, high, max |
 | `claude --resume <TAB>` | Session IDs with message preview tooltips |
 | `claude --add-dir <TAB>` | Directory completion |
 | `claude --debug-file/--mcp-config/--settings <TAB>` | File completion |

@@ -186,6 +186,18 @@ Commands:
             Get-Content (Join-Path $script:CacheDir 'mcp_subcommands') | Should -Contain 'add'
         }
 
+        It 'creates root flag descriptions file' {
+            Join-Path $script:CacheDir '_root_flag_descriptions' | Should -Exist
+        }
+
+        It 'root flag descriptions contains --model' {
+            Get-Content (Join-Path $script:CacheDir '_root_flag_descriptions') | Where-Object { $_ -like '--model*' } | Should -Not -BeNullOrEmpty
+        }
+
+        It 'creates subcommand flag descriptions file' {
+            Join-Path $script:CacheDir 'auth_flag_descriptions' | Should -Exist
+        }
+
         It 'creates doctor flags file' {
             Join-Path $script:CacheDir 'doctor_flags' | Should -Exist
         }

@@ -47,6 +47,7 @@ Describe 'Flag argument completion' {
 
     It 'completes permission mode choices' {
         $results = Get-CompletionText 'claude --permission-mode '
+        $results | Should -Contain 'auto'
         $results | Should -Contain 'default'
         $results | Should -Contain 'plan'
     }
@@ -63,6 +64,7 @@ Describe 'Flag argument completion' {
         $results | Should -Contain 'low'
         $results | Should -Contain 'medium'
         $results | Should -Contain 'high'
+        $results | Should -Contain 'max'
     }
 
     It 'completes input format choices' {

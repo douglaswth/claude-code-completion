@@ -52,6 +52,7 @@ function global:_ClaudeBuildCache {
     Set-Content -Path (Join-Path $cacheDir '_root_help') -Value $helpOutput
     Set-Content -Path (Join-Path $cacheDir '_root_flags') -Value @(_ClaudeParseFlags -HelpLines $helpLines)
     Set-Content -Path (Join-Path $cacheDir '_root_flags_with_args') -Value @(_ClaudeParseFlagsWithArgs -HelpLines $helpLines)
+    Set-Content -Path (Join-Path $cacheDir '_root_flag_descriptions') -Value @(_ClaudeParseFlagDescriptions -HelpLines $helpLines)
     $subcommands = @(_ClaudeParseSubcommands -HelpLines $helpLines)
     Set-Content -Path (Join-Path $cacheDir '_root_subcommands') -Value $subcommands
 
@@ -63,6 +64,7 @@ function global:_ClaudeBuildCache {
         $subHelpLines = @($subHelp -split "`n")
         Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags") -Value @(_ClaudeParseFlags -HelpLines $subHelpLines)
         Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags_with_args") -Value @(_ClaudeParseFlagsWithArgs -HelpLines $subHelpLines)
+        Set-Content -Path (Join-Path $cacheDir "${subcmd}_flag_descriptions") -Value @(_ClaudeParseFlagDescriptions -HelpLines $subHelpLines)
         Set-Content -Path (Join-Path $cacheDir "${subcmd}_subcommands") -Value @(_ClaudeParseSubcommands -HelpLines $subHelpLines)
     }
 
@@ -111,6 +113,18 @@ function global:_ClaudeParseSubcommands {
     }
 }
 
+function global:_ClaudeParseFlagDescriptions {
+    param([string[]]$HelpLines)
+    foreach ($line in $HelpLines) {
+        if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s+.*?\s{2,}(\S.+)') {
+            "$($Matches[1])`t$($Matches[3])"
+            "$($Matches[2])`t$($Matches[3])"
+        } elseif ($line -match '^\s+(--[a-zA-Z][-a-zA-Z]*).*?\s{2,}(\S.+)') {
+            "$($Matches[1])`t$($Matches[2])"
+        }
+    }
+}
+
 $script:_ClaudeKnownModels = @(
     'sonnet', 'opus', 'haiku',
     'claude-sonnet-4-5-20250514',
@@ -141,7 +155,7 @@ function global:_ClaudeCompleteFlagArg {
             }
         }
         '--permission-mode' {
-            @('acceptEdits', 'bypassPermissions', 'default', 'dontAsk', 'plan') |
+            @('acceptEdits', 'auto', 'bypassPermissions', 'default', 'dontAsk', 'plan') |
                 Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
                     [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
                 }
@@ -159,7 +173,7 @@ function global:_ClaudeCompleteFlagArg {
                 }
         }
         '--effort' {
-            @('low', 'medium', 'high') |
+            @('low', 'medium', 'high', 'max') |
                 Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
                     [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
                 }
@@ -390,8 +404,17 @@ function global:_ClaudeComplete {
             # Complete subcommand flags
             $flagsFile = Join-Path $cacheDir "${subcmd}_flags"
             if (Test-Path $flagsFile) {
+                $descFile = Join-Path $cacheDir "${subcmd}_flag_descriptions"
+                $descriptions = @{}
+                if (Test-Path $descFile) {
+                    Get-Content $descFile | ForEach-Object {
+                        $parts = $_ -split "`t", 2
+                        if ($parts.Count -eq 2) { $descriptions[$parts[0]] = $parts[1] }
+                    }
+                }
                 Get-Content $flagsFile | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
-                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterName', $_)
+                    $tooltip = if ($descriptions.ContainsKey($_)) { $descriptions[$_] } else { $_ }
+                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterName', $tooltip)
                 }
             }
         } elseif ($subSubcmd) {
@@ -412,8 +435,17 @@ function global:_ClaudeComplete {
             # Complete flags
             $flagsFile = Join-Path $cacheDir '_root_flags'
             if (Test-Path $flagsFile) {
+                $descFile = Join-Path $cacheDir '_root_flag_descriptions'
+                $descriptions = @{}
+                if (Test-Path $descFile) {
+                    Get-Content $descFile | ForEach-Object {
+                        $parts = $_ -split "`t", 2
+                        if ($parts.Count -eq 2) { $descriptions[$parts[0]] = $parts[1] }
+                    }
+                }
                 Get-Content $flagsFile | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
-                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterName', $_)
+                    $tooltip = if ($descriptions.ContainsKey($_)) { $descriptions[$_] } else { $_ }
+                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterName', $tooltip)
                 }
             }
         } else {

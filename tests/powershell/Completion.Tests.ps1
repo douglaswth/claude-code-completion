@@ -88,6 +88,24 @@ Describe 'Top-level completion' {
     }
 }
 
+Describe 'Flag tooltip descriptions' {
+    It 'flag completions have descriptive tooltips' {
+        $results = Invoke-ClaudeCompleter 'claude --'
+        $modelResult = $results | Where-Object { $_.CompletionText -eq '--model' }
+        $modelResult | Should -Not -BeNullOrEmpty
+        $modelResult.ToolTip | Should -Not -Be '--model'
+        $modelResult.ToolTip | Should -BeLike '*Model*'
+    }
+
+    It 'flags without descriptions fall back to flag name' {
+        # --version is a boolean flag that should still complete even if
+        # the description regex doesn't match for some reason
+        $results = Invoke-ClaudeCompleter 'claude --'
+        $versionResult = $results | Where-Object { $_.CompletionText -eq '--version' }
+        $versionResult | Should -Not -BeNullOrEmpty
+    }
+}
+
 Describe 'Subcommand completion' {
     It 'auth subcommand shows auth sub-subcommands' {
         $results = Get-CompletionText 'claude auth '

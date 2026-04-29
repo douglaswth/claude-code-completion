@@ -19,7 +19,7 @@ Options:
   --input-format <format>        Input format (choices: "text", "stream-json")
   --model <model>                Model for session (default: 'claude-test-9-99').
   --output-format <format>       Output format (choices: "text", "json", "stream-json")
-  --permission-mode <mode>       Permission mode (choices: "acceptEdits", "bypassPermissions", "default", "dontAsk", "plan")
+  --permission-mode <mode>       Permission mode (choices: "acceptEdits", "auto", "bypassPermissions", "default", "dontAsk", "plan")
   --plugin-dir <directory>       Plugin directory
   -p, --print                    Print response and exit
   -r, --resume [value]           Resume a conversation
@@ -61,6 +61,7 @@ function test_model_completes_aliases() {
 function test_permission_mode_completes_choices() {
     local result
     result="$(simulate_completion "claude --permission-mode ")"
+    assert_contains "auto" "$result"
     assert_contains "default" "$result"
     assert_contains "plan" "$result"
 }
@@ -79,6 +80,7 @@ function test_effort_completes_levels() {
     assert_contains "low" "$result"
     assert_contains "medium" "$result"
     assert_contains "high" "$result"
+    assert_contains "max" "$result"
 }
 
 function test_input_format_completes_choices() {

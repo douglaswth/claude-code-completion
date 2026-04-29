@@ -289,7 +289,7 @@ _claude_complete_flag_arg() {
             COMPREPLY=( $(compgen -W "${models[*]}" -- "$cur") )
             ;;
         --permission-mode)
-            COMPREPLY=( $(compgen -W "acceptEdits bypassPermissions default dontAsk plan" -- "$cur") )
+            COMPREPLY=( $(compgen -W "acceptEdits auto bypassPermissions default dontAsk plan" -- "$cur") )
             ;;
         --output-format)
             COMPREPLY=( $(compgen -W "text json stream-json" -- "$cur") )
@@ -298,7 +298,7 @@ _claude_complete_flag_arg() {
             COMPREPLY=( $(compgen -W "text stream-json" -- "$cur") )
             ;;
         --effort)
-            COMPREPLY=( $(compgen -W "low medium high" -- "$cur") )
+            COMPREPLY=( $(compgen -W "low medium high max" -- "$cur") )
             ;;
         --resume|-r)
             _claude_complete_sessions "$cur"
