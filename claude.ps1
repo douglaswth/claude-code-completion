@@ -6,6 +6,17 @@
 # same CLI version.
 $script:ClaudeCacheVersion = 1
 
+# Bundled flags last extended through CHANGELOG version: 0.0.0
+# (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
+#
+# Each entry has fields: Scope, Name, TakesArg, ArgType, Description
+#   Scope       — '_root' or a subcommand name (mcp, plugin, agents, …)
+#   Name        — flag form (e.g. --foo). Short forms are separate entries.
+#   TakesArg    — $true or $false
+#   ArgType     — 'none' | 'file' | 'dir' | 'choice:a,b,c' | 'unknown'
+#   Description — short text
+$script:ClaudeExtraFlags = @()
+
 function global:_ClaudeVersion {
     $output = claude --version 2>$null
     if ($output) {
