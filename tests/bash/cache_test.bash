@@ -49,10 +49,10 @@ function test_ensure_cache_creates_directory() {
 function test_cleanup_old_cache_removes_old_versions() {
     _claude_ensure_cache
     local base_dir="$XDG_CACHE_HOME/claude-code-completion/bash"
-    mkdir -p "$base_dir/0.9.0" "$base_dir/0.8.0"
+    mkdir -p "$base_dir/0.9.0-c1" "$base_dir/0.8.0-c1"
     _claude_cleanup_old_cache
-    assert_directory_not_exists "$base_dir/0.9.0"
-    assert_directory_not_exists "$base_dir/0.8.0"
+    assert_directory_not_exists "$base_dir/0.9.0-c1"
+    assert_directory_not_exists "$base_dir/0.8.0-c1"
 }
 
 function test_cleanup_old_cache_preserves_current_version() {
@@ -121,7 +121,7 @@ function test_cache_dir_includes_schema_version_suffix() {
     cache_dir="$(_claude_cache_dir)"
     # Expected format: <base>/bash/<cli-version>-c<schema-version>
     local last_segment="${cache_dir##*/}"
-    assert_matches '^[0-9.]+-c[0-9]+$' "$last_segment"
+    assert_matches '^[0-9]+\.[0-9]+\.[0-9]+-c[0-9]+$' "$last_segment"
 }
 
 function test_cleanup_old_cache_removes_old_schema_version() {
