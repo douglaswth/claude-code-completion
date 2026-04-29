@@ -18,6 +18,25 @@ fi
 # same CLI version.
 _CLAUDE_CACHE_VERSION=1
 
+# Bundled flags last extended through CHANGELOG version: 0.0.0
+# (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
+#
+# Format: scope<TAB>name<TAB>takes_arg<TAB>arg_type<TAB>description
+#   scope     — "_root" or a subcommand name (mcp, plugin, agents, …)
+#   name      — flag form (e.g. --foo). Short forms are separate entries.
+#   takes_arg — 0 or 1
+#   arg_type  — none | file | dir | choice:a,b,c | unknown
+#   description — short text; no embedded tabs
+_CLAUDE_EXTRA_FLAGS=()
+
+# Split a tab-separated extra-flag record into its fields.
+# Usage: _claude_parse_extra_flag "$record" scope name takes_arg arg_type desc
+_claude_parse_extra_flag() {
+    local record="$1"
+    local -n _scope="$2" _name="$3" _ta="$4" _at="$5" _desc="$6"
+    IFS=$'\t' read -r _scope _name _ta _at _desc <<< "$record"
+}
+
 _claude_version() {
     claude --version 2>/dev/null | head -1 | awk '{print $1}'
 }
