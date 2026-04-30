@@ -461,6 +461,33 @@ _claude_complete_subcmd_arg() {
     esac
 }
 
+_claude_flag_candidates_with_descriptions() {
+    # Build a "flag<TAB>desc" array (printed to stdout, one per line) for the
+    # flags in $1 that match prefix $2. Looks up descriptions in $3.
+    local flags_file="$1"
+    local prefix="$2"
+    local desc_file="$3"
+
+    declare -A descs
+    if [[ -f "$desc_file" ]]; then
+        local f d
+        while IFS=$'\t' read -r f d; do
+            descs["$f"]="$d"
+        done < "$desc_file"
+    fi
+
+    local flag
+    while IFS= read -r flag; do
+        [[ -z "$flag" ]] && continue
+        [[ "$flag" == "$prefix"* ]] || continue
+        if [[ -n "${descs[$flag]:-}" ]]; then
+            printf '%s\t%s\n' "$flag" "${descs[$flag]}"
+        else
+            echo "$flag"
+        fi
+    done < "$flags_file"
+}
+
 _claude() {
     local cur prev words cword
     _init_completion || return
@@ -515,7 +542,22 @@ _claude() {
 
         if [[ "$cur" == -* ]]; then
             if [[ -f "$cache_dir/${subcmd}_flags" ]]; then
-                COMPREPLY=( $(compgen -W "$(cat "$cache_dir/${subcmd}_flags")" -- "$cur") )
+                local candidates=()
+                while IFS= read -r line; do
+                    candidates+=("$line")
+                done < <(_claude_flag_candidates_with_descriptions \
+                    "$cache_dir/${subcmd}_flags" "$cur" \
+                    "$cache_dir/${subcmd}_flag_descriptions")
+                if (( ${#candidates[@]} == 1 )) || [[ ${COMP_TYPE:-9} == @(37|42) ]]; then
+                    # Single match or menu-complete: strip description so insertion is clean.
+                    COMPREPLY=()
+                    local c
+                    for c in "${candidates[@]}"; do
+                        COMPREPLY+=("${c%%$'\t'*}")
+                    done
+                else
+                    _claude_format_descriptions candidates
+                fi
             fi
         elif [[ -n "$sub_subcmd" ]]; then
             # Complete positional args for sub-subcommands
@@ -530,7 +572,22 @@ _claude() {
         if [[ "$cur" == -* ]]; then
             # Complete flags
             if [[ -f "$cache_dir/_root_flags" ]]; then
-                COMPREPLY=( $(compgen -W "$(cat "$cache_dir/_root_flags")" -- "$cur") )
+                local candidates=()
+                while IFS= read -r line; do
+                    candidates+=("$line")
+                done < <(_claude_flag_candidates_with_descriptions \
+                    "$cache_dir/_root_flags" "$cur" \
+                    "$cache_dir/_root_flag_descriptions")
+                if (( ${#candidates[@]} == 1 )) || [[ ${COMP_TYPE:-9} == @(37|42) ]]; then
+                    # Single match or menu-complete: strip description so insertion is clean.
+                    COMPREPLY=()
+                    local c
+                    for c in "${candidates[@]}"; do
+                        COMPREPLY+=("${c%%$'\t'*}")
+                    done
+                else
+                    _claude_format_descriptions candidates
+                fi
             fi
         else
             # Complete subcommands
