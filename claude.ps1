@@ -4,9 +4,9 @@
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-$script:ClaudeCacheVersion = 1
+$script:ClaudeCacheVersion = 2
 
-# Bundled flags last extended through CHANGELOG version: 0.0.0
+# Bundled flags last extended through CHANGELOG version: 2.1.123
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Each entry has fields: Scope, Name, TakesArg, ArgType, Description
@@ -15,7 +15,27 @@ $script:ClaudeCacheVersion = 1
 #   TakesArg    — $true or $false
 #   ArgType     — 'none' | 'file' | 'dir' | 'choice:a,b,c' | 'unknown'
 #   Description — short text
-$script:ClaudeExtraFlags = @()
+$script:ClaudeExtraFlags = @(
+    [pscustomobject]@{ Scope='_root'; Name='--capacity'; TakesArg=$true; ArgType='unknown'; Description='Max concurrent sessions for --remote-control' }
+    [pscustomobject]@{ Scope='_root'; Name='--cowork'; TakesArg=$false; ArgType='none'; Description='Enable co-worker mode (user-scope only)' }
+    [pscustomobject]@{ Scope='_root'; Name='--create-session-in-dir'; TakesArg=$false; ArgType='none'; Description='Pre-create a session in the current directory (--remote-control)' }
+    [pscustomobject]@{ Scope='_root'; Name='--dangerously-load-development-channels'; TakesArg=$false; ArgType='none'; Description='Allow loading MCP channel servers not on the approved allowlist' }
+    [pscustomobject]@{ Scope='_root'; Name='--dump-environment-variables'; TakesArg=$false; ArgType='none'; Description='Dump env vars as JSON and quit (debugging)' }
+    [pscustomobject]@{ Scope='_root'; Name='--handle-uri'; TakesArg=$true; ArgType='unknown'; Description='Handle a URI (used by OS protocol handler registration)' }
+    [pscustomobject]@{ Scope='_root'; Name='--max-thinking-tokens'; TakesArg=$true; ArgType='unknown'; Description='Maximum thinking tokens budget' }
+    [pscustomobject]@{ Scope='_root'; Name='--multi-turn'; TakesArg=$false; ArgType='none'; Description='Enable multi-turn conversation mode' }
+    [pscustomobject]@{ Scope='_root'; Name='--multi-turn-context'; TakesArg=$true; ArgType='unknown'; Description='Context for multi-turn mode' }
+    [pscustomobject]@{ Scope='_root'; Name='--multi-turn-model'; TakesArg=$true; ArgType='unknown'; Description='Model override for multi-turn mode' }
+    [pscustomobject]@{ Scope='_root'; Name='--no-create-session-in-dir'; TakesArg=$false; ArgType='none'; Description='Do not pre-create a session in the current directory (--remote-control)' }
+    [pscustomobject]@{ Scope='_root'; Name='--plan-mode-instructions'; TakesArg=$true; ArgType='unknown'; Description='Custom instructions for plan mode (only with --print)' }
+    [pscustomobject]@{ Scope='_root'; Name='--plan-mode-required'; TakesArg=$false; ArgType='none'; Description='Require plan mode for the session' }
+    [pscustomobject]@{ Scope='_root'; Name='--remote-control'; TakesArg=$true; ArgType='unknown'; Description='Connect local environment to claude.ai/code for remote sessions' }
+    [pscustomobject]@{ Scope='_root'; Name='--resume-session-at'; TakesArg=$true; ArgType='unknown'; Description='Resume a session from a specific message ID (requires --resume)' }
+    [pscustomobject]@{ Scope='_root'; Name='--rewind-files'; TakesArg=$true; ArgType='unknown'; Description='Rewind files to a given message ID (requires --resume)' }
+    [pscustomobject]@{ Scope='_root'; Name='--session-mirror'; TakesArg=$false; ArgType='none'; Description='Mirror local sessions to claude.ai as view-only' }
+    [pscustomobject]@{ Scope='_root'; Name='--spawn'; TakesArg=$true; ArgType='choice:same-dir,worktree,session'; Description='Spawn mode for --remote-control sessions' }
+    [pscustomobject]@{ Scope='_root'; Name='--thinking-display'; TakesArg=$true; ArgType='unknown'; Description='Control how thinking content is displayed' }
+)
 
 function global:_ClaudeVersion {
     $output = claude --version 2>$null

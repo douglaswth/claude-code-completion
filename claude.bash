@@ -16,9 +16,9 @@ fi
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-_CLAUDE_CACHE_VERSION=1
+_CLAUDE_CACHE_VERSION=2
 
-# Bundled flags last extended through CHANGELOG version: 0.0.0
+# Bundled flags last extended through CHANGELOG version: 2.1.123
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Format: scope<TAB>name<TAB>takes_arg<TAB>arg_type<TAB>description
@@ -27,7 +27,27 @@ _CLAUDE_CACHE_VERSION=1
 #   takes_arg — 0 or 1
 #   arg_type  — none | file | dir | choice:a,b,c | unknown
 #   description — short text; no embedded tabs
-_CLAUDE_EXTRA_FLAGS=()
+_CLAUDE_EXTRA_FLAGS=(
+    $'_root\t--capacity\t1\tunknown\tMax concurrent sessions for --remote-control'
+    $'_root\t--cowork\t0\tnone\tEnable co-worker mode (user-scope only)'
+    $'_root\t--create-session-in-dir\t0\tnone\tPre-create a session in the current directory (--remote-control)'
+    $'_root\t--dangerously-load-development-channels\t0\tnone\tAllow loading MCP channel servers not on the approved allowlist'
+    $'_root\t--dump-environment-variables\t0\tnone\tDump env vars as JSON and quit (debugging)'
+    $'_root\t--handle-uri\t1\tunknown\tHandle a URI (used by OS protocol handler registration)'
+    $'_root\t--max-thinking-tokens\t1\tunknown\tMaximum thinking tokens budget'
+    $'_root\t--multi-turn\t0\tnone\tEnable multi-turn conversation mode'
+    $'_root\t--multi-turn-context\t1\tunknown\tContext for multi-turn mode'
+    $'_root\t--multi-turn-model\t1\tunknown\tModel override for multi-turn mode'
+    $'_root\t--no-create-session-in-dir\t0\tnone\tDo not pre-create a session in the current directory (--remote-control)'
+    $'_root\t--plan-mode-instructions\t1\tunknown\tCustom instructions for plan mode (only with --print)'
+    $'_root\t--plan-mode-required\t0\tnone\tRequire plan mode for the session'
+    $'_root\t--remote-control\t1\tunknown\tConnect local environment to claude.ai/code for remote sessions'
+    $'_root\t--resume-session-at\t1\tunknown\tResume a session from a specific message ID (requires --resume)'
+    $'_root\t--rewind-files\t1\tunknown\tRewind files to a given message ID (requires --resume)'
+    $'_root\t--session-mirror\t0\tnone\tMirror local sessions to claude.ai as view-only'
+    $'_root\t--spawn\t1\tchoice:same-dir,worktree,session\tSpawn mode for --remote-control sessions'
+    $'_root\t--thinking-display\t1\tunknown\tControl how thinking content is displayed'
+)
 
 # Split a tab-separated extra-flag record into its fields.
 # Usage: _claude_parse_extra_flag_record "$record" scope name takes_arg arg_type desc
