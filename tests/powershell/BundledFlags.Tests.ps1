@@ -119,4 +119,21 @@ Describe 'Bundled arg-type completion' {
         $content = Get-Content (Join-Path $cacheDir '_root_flag_arg_types') -Raw
         $content | Should -Match '--my-dir\tdir'
     }
+
+    It 'dir arg-type completes against absolute path prefix' {
+        # Regression: the dispatch must use -Path/$_.FullName like the named
+        # --add-dir/--plugin-dir arms, not -Filter/$_.Name (which would only
+        # work for bare leaf prefixes in the current directory).
+        $tmp = Join-Path $TestDrive "dirtest-$([guid]::NewGuid())"
+        New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $tmp 'subdir') -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $tmp 'file.txt') -Force | Out-Null
+        $script:ClaudeExtraFlags = @(
+            [pscustomobject]@{ Scope='_root'; Name='--my-dir'; TakesArg=$true; ArgType='dir'; Description='Dir flag' }
+        )
+        _ClaudeBuildCache
+        $results = Get-CompletionText "claude --my-dir $tmp/"
+        $results | Should -Contain (Join-Path $tmp 'subdir')
+        $results | Should -Not -Contain (Join-Path $tmp 'file.txt')
+    }
 }

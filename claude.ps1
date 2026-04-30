@@ -242,9 +242,9 @@ function global:_ClaudeCompleteFlagArg {
             $argType = _ClaudeLookupArgType -Flag $Flag -Scope $Scope
             switch -Wildcard ($argType) {
                 'dir' {
-                    Get-ChildItem -Directory -Filter "$WordToComplete*" -ErrorAction SilentlyContinue |
+                    Get-ChildItem -Path "$WordToComplete*" -Directory -ErrorAction SilentlyContinue |
                         ForEach-Object {
-                            [System.Management.Automation.CompletionResult]::new($_.Name, $_.Name, 'ProviderItem', $_.FullName)
+                            [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, 'ProviderContainer', $_.FullName)
                         }
                 }
                 'choice:*' {
