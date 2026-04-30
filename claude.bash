@@ -99,6 +99,33 @@ _claude_parse_flags_with_args() {
     done
 }
 
+_claude_parse_flag_descriptions() {
+    # Parse "<flag><TAB><description>" lines from help output on stdin.
+    # Two whitespace gap separates the flag block (with optional <value>
+    # / [value] argument placeholder) from the description. Mirrors
+    # fnrhombus's PowerShell parser at claude.ps1's _ClaudeParseFlagDescriptions.
+    local line short long rest desc
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)(.*)$ ]]; then
+            short="${BASH_REMATCH[1]}"
+            long="${BASH_REMATCH[2]}"
+            rest="${BASH_REMATCH[3]}"
+            if [[ "$rest" =~ [[:space:]][[:space:]]+([^[:space:]].*)$ ]]; then
+                desc="${BASH_REMATCH[1]}"
+                printf '%s\t%s\n' "$short" "$desc"
+                printf '%s\t%s\n' "$long" "$desc"
+            fi
+        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)(.*)$ ]]; then
+            long="${BASH_REMATCH[1]}"
+            rest="${BASH_REMATCH[2]}"
+            if [[ "$rest" =~ [[:space:]][[:space:]]+([^[:space:]].*)$ ]]; then
+                desc="${BASH_REMATCH[1]}"
+                printf '%s\t%s\n' "$long" "$desc"
+            fi
+        fi
+    done
+}
+
 _claude_parse_subcommands() {
     # Parse subcommand names from help output on stdin
     # Looks for lines in the "Commands:" section
@@ -132,6 +159,7 @@ _claude_build_cache() {
     echo "$help_output" > "$cache_dir/_root_help"
     echo "$help_output" | _claude_parse_flags > "$cache_dir/_root_flags"
     echo "$help_output" | _claude_parse_flags_with_args > "$cache_dir/_root_flags_with_args"
+    echo "$help_output" | _claude_parse_flag_descriptions > "$cache_dir/_root_flag_descriptions"
     echo "$help_output" | _claude_parse_subcommands > "$cache_dir/_root_subcommands"
 
     # Parse each subcommand
@@ -142,8 +170,26 @@ _claude_build_cache() {
         sub_help="$(claude "$subcmd" --help 2>/dev/null)" || continue
         echo "$sub_help" | _claude_parse_flags > "$cache_dir/${subcmd}_flags"
         echo "$sub_help" | _claude_parse_flags_with_args > "$cache_dir/${subcmd}_flags_with_args"
+        echo "$sub_help" | _claude_parse_flag_descriptions > "$cache_dir/${subcmd}_flag_descriptions"
         echo "$sub_help" | _claude_parse_subcommands > "$cache_dir/${subcmd}_subcommands"
     done < "$cache_dir/_root_subcommands"
+
+    # Merge bundled flags into the cache files (skip ones already present from --help).
+    local rec scope name takes_arg arg_type desc
+    for rec in "${_CLAUDE_EXTRA_FLAGS[@]}"; do
+        [[ -z "$rec" ]] && continue
+        _claude_parse_extra_flag_record "$rec" scope name takes_arg arg_type desc
+        local flags_file="$cache_dir/${scope}_flags"
+        [[ -f "$flags_file" ]] || continue
+        if grep -qx -- "$name" "$flags_file"; then
+            continue  # --help wins on overlap
+        fi
+        echo "$name" >> "$flags_file"
+        if [[ "$takes_arg" == "1" ]]; then
+            echo "$name" >> "$cache_dir/${scope}_flags_with_args"
+        fi
+        printf '%s\t%s\n' "$name" "$desc" >> "$cache_dir/${scope}_flag_descriptions"
+    done
 
     # Clean up old versions
     _claude_cleanup_old_cache

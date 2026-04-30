@@ -13,6 +13,7 @@ function set_up() {
 
 function tear_down() {
     rm -rf "$XDG_CACHE_HOME"
+    _CLAUDE_EXTRA_FLAGS=()
 }
 
 function tear_down_after_script() {
@@ -64,4 +65,69 @@ function test_parse_extra_flag_record_handles_empty_record() {
     assert_equals "" "$takes_arg"
     assert_equals "" "$arg_type"
     assert_equals "" "$desc"
+}
+
+function _setup_extra_flag() {
+    # Inject one bundled flag entry for this test only.
+    _CLAUDE_EXTRA_FLAGS=("$1")
+}
+
+function test_bundled_root_flag_appears_in_root_flags() {
+    _setup_extra_flag $'_root\t--bundled-root\t0\tnone\tA bundled root flag'
+    _claude_build_cache
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_file_contains "$cache_dir/_root_flags" "--bundled-root"
+}
+
+function test_bundled_subcommand_flag_appears_in_subcommand_flags_only() {
+    _setup_extra_flag $'mcp\t--bundled-mcp\t0\tnone\tA bundled mcp flag'
+    _claude_build_cache
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_file_contains "$cache_dir/mcp_flags" "--bundled-mcp"
+    assert_file_not_contains "$cache_dir/_root_flags" "--bundled-mcp"
+}
+
+function test_bundled_flag_with_takes_arg_appears_in_flags_with_args() {
+    _setup_extra_flag $'_root\t--bundled-arg\t1\tdir\tTakes a dir'
+    _claude_build_cache
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_file_contains "$cache_dir/_root_flags_with_args" "--bundled-arg"
+}
+
+function test_bundled_flag_without_arg_not_in_flags_with_args() {
+    _setup_extra_flag $'_root\t--bundled-bool\t0\tnone\tBoolean'
+    _claude_build_cache
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_file_not_contains "$cache_dir/_root_flags_with_args" "--bundled-bool"
+}
+
+function test_bundled_flag_dedupes_against_help_derived_flag() {
+    # --model is already in the mock --help output
+    _setup_extra_flag $'_root\t--model\t1\tunknown\tStale bundled entry'
+    _claude_build_cache
+    local cache_dir count
+    cache_dir="$(_claude_cache_dir)"
+    count=$(grep -cFx -- "--model" "$cache_dir/_root_flags")
+    assert_equals "1" "$count"
+}
+
+function test_bundled_description_appears_in_flag_descriptions() {
+    _setup_extra_flag $'_root\t--bundled-desc\t0\tnone\tDescriptive text'
+    _claude_build_cache
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_file_contains "$cache_dir/_root_flag_descriptions" "--bundled-desc"
+    assert_file_contains "$cache_dir/_root_flag_descriptions" "Descriptive text"
+}
+
+function test_help_derived_flag_descriptions_present() {
+    _claude_build_cache
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_file_contains "$cache_dir/_root_flag_descriptions" "--model"
+    assert_file_contains "$cache_dir/_root_flag_descriptions" "Model for session"
 }
