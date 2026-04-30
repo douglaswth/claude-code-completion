@@ -175,13 +175,13 @@ _claude_build_cache() {
     done < "$cache_dir/_root_subcommands"
 
     # Merge bundled flags into the cache files (skip ones already present from --help).
-    local rec scope name takes_arg arg_type desc
+    local rec scope name takes_arg arg_type desc flags_file
     for rec in "${_CLAUDE_EXTRA_FLAGS[@]}"; do
         [[ -z "$rec" ]] && continue
         _claude_parse_extra_flag_record "$rec" scope name takes_arg arg_type desc
-        local flags_file="$cache_dir/${scope}_flags"
+        flags_file="$cache_dir/${scope}_flags"
         [[ -f "$flags_file" ]] || continue
-        if grep -qx -- "$name" "$flags_file"; then
+        if grep -qFx -- "$name" "$flags_file"; then
             continue  # --help wins on overlap
         fi
         echo "$name" >> "$flags_file"
