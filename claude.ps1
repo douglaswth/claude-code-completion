@@ -97,6 +97,7 @@ function global:_ClaudeBuildCache {
             Add-Content -Path (Join-Path $cacheDir "$($entry.Scope)_flags_with_args") -Value $entry.Name
         }
         Add-Content -Path (Join-Path $cacheDir "$($entry.Scope)_flag_descriptions") -Value "$($entry.Name)`t$($entry.Description)"
+        Add-Content -Path (Join-Path $cacheDir "$($entry.Scope)_flag_arg_types") -Value "$($entry.Name)`t$($entry.ArgType)"
     }
 
     _ClaudeCleanupOldCache
@@ -167,8 +168,22 @@ $script:_ClaudeKnownModels = @(
     'claude-haiku-4-5-20251001'
 )
 
+function global:_ClaudeLookupArgType {
+    param([string]$Flag, [string]$Scope)
+    $cacheDir = _ClaudeCacheDir
+    $file = Join-Path $cacheDir "${Scope}_flag_arg_types"
+    if (-not (Test-Path $file)) { return $null }
+    foreach ($line in Get-Content $file) {
+        $parts = $line -split "`t", 2
+        if ($parts.Count -eq 2 -and $parts[0] -eq $Flag) {
+            return $parts[1]
+        }
+    }
+    return $null
+}
+
 function global:_ClaudeCompleteFlagArg {
-    param([string]$Flag, [string]$WordToComplete)
+    param([string]$Flag, [string]$WordToComplete, [string]$Scope = '_root')
 
     switch ($Flag) {
         '--model' {
@@ -224,10 +239,28 @@ function global:_ClaudeCompleteFlagArg {
             }
         }
         default {
-            # Unknown flag arg — default to file completion
-            Get-ChildItem -Path "$WordToComplete*" -ErrorAction SilentlyContinue | ForEach-Object {
-                $type = if ($_.PSIsContainer) { 'ProviderContainer' } else { 'ProviderItem' }
-                [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, $type, $_.FullName)
+            $argType = _ClaudeLookupArgType -Flag $Flag -Scope $Scope
+            switch -Wildcard ($argType) {
+                'dir' {
+                    Get-ChildItem -Directory -Filter "$WordToComplete*" -ErrorAction SilentlyContinue |
+                        ForEach-Object {
+                            [System.Management.Automation.CompletionResult]::new($_.Name, $_.Name, 'ProviderItem', $_.FullName)
+                        }
+                }
+                'choice:*' {
+                    $choices = $argType.Substring('choice:'.Length) -split ','
+                    $choices | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+                        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+                    }
+                }
+                'none' { }
+                default {
+                    Get-ChildItem -Path "$WordToComplete*" -ErrorAction SilentlyContinue |
+                        ForEach-Object {
+                            $type = if ($_.PSIsContainer) { 'ProviderContainer' } else { 'ProviderItem' }
+                            [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, $type, $_.FullName)
+                        }
+                }
             }
         }
     }
@@ -413,7 +446,8 @@ function global:_ClaudeComplete {
             Join-Path $cacheDir '_root_flags_with_args'
         }
         if ((Test-Path $flagsWithArgsFile) -and ((Get-Content $flagsWithArgsFile) -contains $prev)) {
-            _ClaudeCompleteFlagArg -Flag $prev -WordToComplete $WordToComplete
+            $scopeArg = if ($subcmd) { $subcmd } else { '_root' }
+            _ClaudeCompleteFlagArg -Flag $prev -WordToComplete $WordToComplete -Scope $scopeArg
             return
         }
     }

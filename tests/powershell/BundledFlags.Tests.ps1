@@ -85,3 +85,38 @@ Describe 'Bundled flag cache merging' {
         $content | Should -Match 'Descriptive text'
     }
 }
+
+Describe 'Bundled arg-type completion' {
+    BeforeEach {
+        $script:TestCacheDir = Join-Path $TestDrive "cache-$([guid]::NewGuid())"
+        $env:XDG_CACHE_HOME = $script:TestCacheDir
+        $script:OriginalExtraFlags = $script:ClaudeExtraFlags
+        $script:ClaudeExtraFlags = @()
+    }
+
+    AfterEach {
+        $env:XDG_CACHE_HOME = $null
+        $script:ClaudeExtraFlags = $script:OriginalExtraFlags
+    }
+
+    It 'completes choices for arg_type=choice:a,b,c' {
+        $script:ClaudeExtraFlags = @(
+            [pscustomobject]@{ Scope='_root'; Name='--my-choice'; TakesArg=$true; ArgType='choice:alpha,beta,gamma'; Description='Choice flag' }
+        )
+        _ClaudeBuildCache
+        $results = Get-CompletionText 'claude --my-choice '
+        $results | Should -Contain 'alpha'
+        $results | Should -Contain 'beta'
+        $results | Should -Contain 'gamma'
+    }
+
+    It 'sidecar file written for bundled arg_type entries' {
+        $script:ClaudeExtraFlags = @(
+            [pscustomobject]@{ Scope='_root'; Name='--my-dir'; TakesArg=$true; ArgType='dir'; Description='Dir flag' }
+        )
+        _ClaudeBuildCache
+        $cacheDir = _ClaudeCacheDir
+        $content = Get-Content (Join-Path $cacheDir '_root_flag_arg_types') -Raw
+        $content | Should -Match '--my-dir\tdir'
+    }
+}
