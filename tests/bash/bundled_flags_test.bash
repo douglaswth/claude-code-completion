@@ -131,3 +131,46 @@ function test_help_derived_flag_descriptions_present() {
     assert_file_contains "$cache_dir/_root_flag_descriptions" "--model"
     assert_file_contains "$cache_dir/_root_flag_descriptions" "Model for session"
 }
+
+function test_bundled_arg_type_dir_completes_directories() {
+    local tmpdir
+    tmpdir="$(mktemp -d)"
+    mkdir "$tmpdir/subdir"
+    touch "$tmpdir/file.txt"
+    cd "$tmpdir" || return
+    _setup_extra_flag $'_root\t--my-dir\t1\tdir\tDir flag'
+    local result
+    result="$(simulate_completion "claude --my-dir ")"
+    cd / && rm -rf "$tmpdir"
+    assert_contains "subdir" "$result"
+    assert_not_contains "file.txt" "$result"
+}
+
+function test_bundled_arg_type_choice_completes_options() {
+    _setup_extra_flag $'_root\t--my-choice\t1\tchoice:alpha,beta,gamma\tChoice flag'
+    local result
+    result="$(simulate_completion "claude --my-choice ")"
+    assert_contains "alpha" "$result"
+    assert_contains "beta" "$result"
+    assert_contains "gamma" "$result"
+}
+
+function test_bundled_arg_type_none_yields_no_value_completion() {
+    _setup_extra_flag $'_root\t--my-bool\t0\tnone\tBoolean flag'
+    _claude_build_cache
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    assert_file_not_contains "$cache_dir/_root_flags_with_args" "--my-bool"
+}
+
+function test_bundled_arg_type_unknown_falls_back_to_file_completion() {
+    local tmpdir
+    tmpdir="$(mktemp -d)"
+    touch "$tmpdir/somefile"
+    cd "$tmpdir" || return
+    _setup_extra_flag $'_root\t--my-mystery\t1\tunknown\tMystery flag'
+    local result
+    result="$(simulate_completion "claude --my-mystery ")"
+    cd / && rm -rf "$tmpdir"
+    assert_contains "somefile" "$result"
+}

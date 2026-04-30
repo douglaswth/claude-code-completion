@@ -189,6 +189,7 @@ _claude_build_cache() {
             echo "$name" >> "$cache_dir/${scope}_flags_with_args"
         fi
         printf '%s\t%s\n' "$name" "$desc" >> "$cache_dir/${scope}_flag_descriptions"
+        printf '%s\t%s\n' "$name" "$arg_type" >> "$cache_dir/${scope}_flag_arg_types"
     done
 
     # Clean up old versions
@@ -336,11 +337,29 @@ _CLAUDE_KNOWN_MODELS=(
     claude-haiku-4-5-20251001
 )
 
+_claude_lookup_arg_type() {
+    # Look up the bundled arg_type for a flag in the given scope. Returns
+    # empty string if no entry. Pure bash; no external commands.
+    local flag="$1" scope="$2"
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    local file="$cache_dir/${scope}_flag_arg_types"
+    [[ -f "$file" ]] || return
+    local f t
+    while IFS=$'\t' read -r f t; do
+        if [[ "$f" == "$flag" ]]; then
+            echo "$t"
+            return
+        fi
+    done < "$file"
+}
+
 _claude_complete_flag_arg() {
     # Complete arguments for flags that take values
-    # $1 = flag name, $2 = current word
+    # $1 = flag name, $2 = current word, $3 = scope (default: _root)
     local flag="$1"
     local cur="$2"
+    local scope="${3:-_root}"
 
     case "$flag" in
         --model)
@@ -386,8 +405,24 @@ _claude_complete_flag_arg() {
             COMPREPLY=( $(compgen -d -- "$cur") )
             ;;
         *)
-            # Unknown flag arg — default to file completion
-            COMPREPLY=( $(compgen -f -- "$cur") )
+            # Consult bundled arg_type sidecar before falling back to file completion.
+            local arg_type
+            arg_type="$(_claude_lookup_arg_type "$flag" "$scope")"
+            case "$arg_type" in
+                dir)
+                    COMPREPLY=( $(compgen -d -- "$cur") )
+                    ;;
+                choice:*)
+                    local choices="${arg_type#choice:}"
+                    COMPREPLY=( $(compgen -W "${choices//,/ }" -- "$cur") )
+                    ;;
+                none)
+                    COMPREPLY=()
+                    ;;
+                file|unknown|"")
+                    COMPREPLY=( $(compgen -f -- "$cur") )
+                    ;;
+            esac
             ;;
     esac
 }
@@ -454,11 +489,13 @@ _claude() {
     # Check if previous word is a flag that takes an argument
     if [[ "$prev" == -* ]]; then
         local flags_with_args_file="$cache_dir/_root_flags_with_args"
+        local _scope="_root"
         if [[ -n "$subcmd" ]]; then
             flags_with_args_file="$cache_dir/${subcmd}_flags_with_args"
+            _scope="$subcmd"
         fi
         if [[ -f "$flags_with_args_file" ]] && grep -qx -- "$prev" "$flags_with_args_file"; then
-            _claude_complete_flag_arg "$prev" "$cur"
+            _claude_complete_flag_arg "$prev" "$cur" "$_scope"
             return
         fi
     fi
