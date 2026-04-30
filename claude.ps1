@@ -85,6 +85,20 @@ function global:_ClaudeBuildCache {
         Set-Content -Path (Join-Path $cacheDir "${subcmd}_subcommands") -Value @(_ClaudeParseSubcommands -HelpLines $subHelpLines)
     }
 
+    # Merge bundled flags into the cache files (skip ones already present from --help).
+    foreach ($entry in $script:ClaudeExtraFlags) {
+        if (-not $entry) { continue }
+        $flagsFile = Join-Path $cacheDir "$($entry.Scope)_flags"
+        if (-not (Test-Path $flagsFile)) { continue }
+        $existing = @(Get-Content $flagsFile)
+        if ($existing -contains $entry.Name) { continue }
+        Add-Content -Path $flagsFile -Value $entry.Name
+        if ($entry.TakesArg) {
+            Add-Content -Path (Join-Path $cacheDir "$($entry.Scope)_flags_with_args") -Value $entry.Name
+        }
+        Add-Content -Path (Join-Path $cacheDir "$($entry.Scope)_flag_descriptions") -Value "$($entry.Name)`t$($entry.Description)"
+    }
+
     _ClaudeCleanupOldCache
 }
 
