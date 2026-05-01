@@ -7,6 +7,7 @@ Shell completion for the `claude` CLI ([Claude Code](https://claude.ai/code)). P
 Both shells share the same core capabilities:
 
 - **Dynamic help parsing** — extracts flags and subcommands from `claude --help` at completion time, so completions stay current across CLI updates
+- **Bundled hidden flags** — also completes flags the running `claude --help` doesn't list: intentionally hidden flags, and flags announced in newer Claude Code versions that lagging installs (e.g. FreeBSD ports) don't yet expose
 - **Version-based caching** — parsed help output is cached per CLI version; old versions are cleaned up automatically
 - **Smart flag completions** — context-aware values for `--model`, `--permission-mode`, `--output-format`, `--input-format`, `--effort`, and more
 - **Session resume** — `--resume` completes session IDs with message previews from your current project
