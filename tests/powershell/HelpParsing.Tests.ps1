@@ -79,6 +79,17 @@ Commands:
         It 'does not include non-flag lines' {
             ($descriptions | Where-Object { $_ -like 'prompt*' }) | Should -BeNullOrEmpty
         }
+
+        It 'strips trailing CR from descriptions when help has CRLF line endings' {
+            # Regression: Git's autocrlf checks .ps1 files out with CRLF on
+            # Windows runners. The here-string in BeforeAll then carries CRLF,
+            # and `-split "`n"` leaves trailing `\r` that the regex's `(\S.+)`
+            # capture greedily picks up. The parser must tolerate this.
+            $crlfHelp = "  --crlf-flag                    Description with CRLF`r`n"
+            $crlfLines = $crlfHelp -split "`n"
+            $crlfDescriptions = @(_ClaudeParseFlagDescriptions -HelpLines $crlfLines)
+            $crlfDescriptions | Should -Contain "--crlf-flag`tDescription with CRLF"
+        }
     }
 
     Context '_ClaudeParseSubcommands' {

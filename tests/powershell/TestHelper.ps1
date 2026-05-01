@@ -45,6 +45,18 @@ Commands:
   auth                           Manage authentication
   mcp                            Configure MCP servers
 '@
+        'mcp --help' = @'
+Usage: claude mcp [options] [command]
+
+Options:
+  -h, --help        Display help
+
+Commands:
+  add [options] <name> <commandOrUrl> [args...]  Add server
+  get <name>                                     Get server
+  list                                           List servers
+  remove [options] <name>                        Remove server
+'@
     }
 }
 

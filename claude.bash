@@ -13,13 +13,57 @@ if ! declare -F _init_completion &>/dev/null; then
     }
 fi
 
+# Cache schema version. Bump on any change to bundled-flag data, sidecar
+# file format, or cache layout. Bumps invalidate existing caches for the
+# same CLI version.
+_CLAUDE_CACHE_VERSION=2
+
+# Bundled flags last extended through CHANGELOG version: 2.1.123
+# (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
+#
+# Format: scope<TAB>name<TAB>takes_arg<TAB>arg_type<TAB>description
+#   scope     — "_root" or a subcommand name (mcp, plugin, agents, …)
+#   name      — flag form (e.g. --foo). Short forms are separate entries.
+#   takes_arg — 0 or 1
+#   arg_type  — none | file | dir | choice:a,b,c | unknown
+#   description — short text; no embedded tabs
+_CLAUDE_EXTRA_FLAGS=(
+    $'_root\t--capacity\t1\tunknown\tMax concurrent sessions for --remote-control'
+    $'_root\t--cowork\t0\tnone\tEnable co-worker mode (user-scope only)'
+    $'_root\t--create-session-in-dir\t0\tnone\tPre-create a session in the current directory (--remote-control)'
+    $'_root\t--dangerously-load-development-channels\t0\tnone\tAllow loading MCP channel servers not on the approved allowlist'
+    $'_root\t--dump-environment-variables\t0\tnone\tDump env vars as JSON and quit (debugging)'
+    $'_root\t--handle-uri\t1\tunknown\tHandle a URI (used by OS protocol handler registration)'
+    $'_root\t--max-thinking-tokens\t1\tunknown\tMaximum thinking tokens budget'
+    $'_root\t--multi-turn\t0\tnone\tEnable multi-turn conversation mode'
+    $'_root\t--multi-turn-context\t1\tunknown\tContext for multi-turn mode'
+    $'_root\t--multi-turn-model\t1\tunknown\tModel override for multi-turn mode'
+    $'_root\t--no-create-session-in-dir\t0\tnone\tDo not pre-create a session in the current directory (--remote-control)'
+    $'_root\t--plan-mode-instructions\t1\tunknown\tCustom instructions for plan mode (only with --print)'
+    $'_root\t--plan-mode-required\t0\tnone\tRequire plan mode for the session'
+    $'_root\t--remote-control\t1\tunknown\tConnect local environment to claude.ai/code for remote sessions'
+    $'_root\t--resume-session-at\t1\tunknown\tResume a session from a specific message ID (requires --resume)'
+    $'_root\t--rewind-files\t1\tunknown\tRewind files to a given message ID (requires --resume)'
+    $'_root\t--session-mirror\t0\tnone\tMirror local sessions to claude.ai as view-only'
+    $'_root\t--spawn\t1\tchoice:same-dir,worktree,session\tSpawn mode for --remote-control sessions'
+    $'_root\t--thinking-display\t1\tunknown\tControl how thinking content is displayed'
+)
+
+# Split a tab-separated extra-flag record into its fields.
+# Usage: _claude_parse_extra_flag_record "$record" scope name takes_arg arg_type desc
+_claude_parse_extra_flag_record() {
+    local record="$1"
+    local -n _scope="$2" _name="$3" _takes_arg="$4" _arg_type="$5" _desc="$6"
+    IFS=$'\t' read -r _scope _name _takes_arg _arg_type _desc <<< "$record"
+}
+
 _claude_version() {
     claude --version 2>/dev/null | head -1 | awk '{print $1}'
 }
 
 _claude_cache_dir() {
     local xdg_cache="${XDG_CACHE_HOME:-$HOME/.cache}"
-    echo "$xdg_cache/claude-code-completion/bash/$(_claude_version)"
+    echo "$xdg_cache/claude-code-completion/bash/$(_claude_version)-c${_CLAUDE_CACHE_VERSION}"
 }
 
 _claude_ensure_cache() {
@@ -31,17 +75,17 @@ _claude_ensure_cache() {
 _claude_cleanup_old_cache() {
     local xdg_cache="${XDG_CACHE_HOME:-$HOME/.cache}"
     local base_dir="$xdg_cache/claude-code-completion/bash"
-    local current_version
-    current_version="$(_claude_version)"
+    local current_key
+    current_key="$(_claude_version)-c${_CLAUDE_CACHE_VERSION}"
 
     [[ -d "$base_dir" ]] || return 0
 
     local dir
     for dir in "$base_dir"/*/; do
         [[ -d "$dir" ]] || continue
-        local dir_version
-        dir_version="$(basename "$dir")"
-        if [[ "$dir_version" != "$current_version" ]]; then
+        local dir_key
+        dir_key="$(basename "$dir")"
+        if [[ "$dir_key" != "$current_key" ]]; then
             rm -rf "$dir"
         fi
     done
@@ -71,6 +115,33 @@ _claude_parse_flags_with_args() {
             echo "${BASH_REMATCH[2]}"
         elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]]+[\<\[] ]]; then
             echo "${BASH_REMATCH[1]}"
+        fi
+    done
+}
+
+_claude_parse_flag_descriptions() {
+    # Parse "<flag><TAB><description>" lines from help output on stdin.
+    # Two whitespace gap separates the flag block (with optional <value>
+    # / [value] argument placeholder) from the description. Mirrors
+    # fnrhombus's PowerShell parser at claude.ps1's _ClaudeParseFlagDescriptions.
+    local line short long rest desc
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)(.*)$ ]]; then
+            short="${BASH_REMATCH[1]}"
+            long="${BASH_REMATCH[2]}"
+            rest="${BASH_REMATCH[3]}"
+            if [[ "$rest" =~ [[:space:]][[:space:]]+([^[:space:]].*)$ ]]; then
+                desc="${BASH_REMATCH[1]}"
+                printf '%s\t%s\n' "$short" "$desc"
+                printf '%s\t%s\n' "$long" "$desc"
+            fi
+        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)(.*)$ ]]; then
+            long="${BASH_REMATCH[1]}"
+            rest="${BASH_REMATCH[2]}"
+            if [[ "$rest" =~ [[:space:]][[:space:]]+([^[:space:]].*)$ ]]; then
+                desc="${BASH_REMATCH[1]}"
+                printf '%s\t%s\n' "$long" "$desc"
+            fi
         fi
     done
 }
@@ -108,6 +179,7 @@ _claude_build_cache() {
     echo "$help_output" > "$cache_dir/_root_help"
     echo "$help_output" | _claude_parse_flags > "$cache_dir/_root_flags"
     echo "$help_output" | _claude_parse_flags_with_args > "$cache_dir/_root_flags_with_args"
+    echo "$help_output" | _claude_parse_flag_descriptions > "$cache_dir/_root_flag_descriptions"
     echo "$help_output" | _claude_parse_subcommands > "$cache_dir/_root_subcommands"
 
     # Parse each subcommand
@@ -118,8 +190,27 @@ _claude_build_cache() {
         sub_help="$(claude "$subcmd" --help 2>/dev/null)" || continue
         echo "$sub_help" | _claude_parse_flags > "$cache_dir/${subcmd}_flags"
         echo "$sub_help" | _claude_parse_flags_with_args > "$cache_dir/${subcmd}_flags_with_args"
+        echo "$sub_help" | _claude_parse_flag_descriptions > "$cache_dir/${subcmd}_flag_descriptions"
         echo "$sub_help" | _claude_parse_subcommands > "$cache_dir/${subcmd}_subcommands"
     done < "$cache_dir/_root_subcommands"
+
+    # Merge bundled flags into the cache files (skip ones already present from --help).
+    local rec scope name takes_arg arg_type desc flags_file
+    for rec in "${_CLAUDE_EXTRA_FLAGS[@]}"; do
+        [[ -z "$rec" ]] && continue
+        _claude_parse_extra_flag_record "$rec" scope name takes_arg arg_type desc
+        flags_file="$cache_dir/${scope}_flags"
+        [[ -f "$flags_file" ]] || continue
+        if grep -qFx -- "$name" "$flags_file"; then
+            continue  # --help wins on overlap
+        fi
+        echo "$name" >> "$flags_file"
+        if [[ "$takes_arg" == "1" ]]; then
+            echo "$name" >> "$cache_dir/${scope}_flags_with_args"
+        fi
+        printf '%s\t%s\n' "$name" "$desc" >> "$cache_dir/${scope}_flag_descriptions"
+        printf '%s\t%s\n' "$name" "$arg_type" >> "$cache_dir/${scope}_flag_arg_types"
+    done
 
     # Clean up old versions
     _claude_cleanup_old_cache
@@ -266,11 +357,29 @@ _CLAUDE_KNOWN_MODELS=(
     claude-haiku-4-5-20251001
 )
 
+_claude_lookup_arg_type() {
+    # Look up the bundled arg_type for a flag in the given scope. Returns
+    # empty string if no entry. Pure bash; no external commands.
+    local flag="$1" scope="$2"
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    local file="$cache_dir/${scope}_flag_arg_types"
+    [[ -f "$file" ]] || return
+    local f t
+    while IFS=$'\t' read -r f t; do
+        if [[ "$f" == "$flag" ]]; then
+            echo "$t"
+            return
+        fi
+    done < "$file"
+}
+
 _claude_complete_flag_arg() {
     # Complete arguments for flags that take values
-    # $1 = flag name, $2 = current word
+    # $1 = flag name, $2 = current word, $3 = scope (default: _root)
     local flag="$1"
     local cur="$2"
+    local scope="${3:-_root}"
 
     case "$flag" in
         --model)
@@ -316,8 +425,24 @@ _claude_complete_flag_arg() {
             COMPREPLY=( $(compgen -d -- "$cur") )
             ;;
         *)
-            # Unknown flag arg — default to file completion
-            COMPREPLY=( $(compgen -f -- "$cur") )
+            # Consult bundled arg_type sidecar before falling back to file completion.
+            local arg_type
+            arg_type="$(_claude_lookup_arg_type "$flag" "$scope")"
+            case "$arg_type" in
+                dir)
+                    COMPREPLY=( $(compgen -d -- "$cur") )
+                    ;;
+                choice:*)
+                    local choices="${arg_type#choice:}"
+                    COMPREPLY=( $(compgen -W "${choices//,/ }" -- "$cur") )
+                    ;;
+                none)
+                    COMPREPLY=()
+                    ;;
+                file|unknown|"")
+                    COMPREPLY=( $(compgen -f -- "$cur") )
+                    ;;
+            esac
             ;;
     esac
 }
@@ -356,6 +481,33 @@ _claude_complete_subcmd_arg() {
     esac
 }
 
+_claude_flag_candidates_with_descriptions() {
+    # Build a "flag<TAB>desc" array (printed to stdout, one per line) for the
+    # flags in $1 that match prefix $2. Looks up descriptions in $3.
+    local flags_file="$1"
+    local prefix="$2"
+    local desc_file="$3"
+
+    declare -A descs
+    if [[ -f "$desc_file" ]]; then
+        local f d
+        while IFS=$'\t' read -r f d; do
+            descs["$f"]="$d"
+        done < "$desc_file"
+    fi
+
+    local flag
+    while IFS= read -r flag; do
+        [[ -z "$flag" ]] && continue
+        [[ "$flag" == "$prefix"* ]] || continue
+        if [[ -n "${descs[$flag]:-}" ]]; then
+            printf '%s\t%s\n' "$flag" "${descs[$flag]}"
+        else
+            echo "$flag"
+        fi
+    done < "$flags_file"
+}
+
 _claude() {
     local cur prev words cword
     _init_completion || return
@@ -384,11 +536,13 @@ _claude() {
     # Check if previous word is a flag that takes an argument
     if [[ "$prev" == -* ]]; then
         local flags_with_args_file="$cache_dir/_root_flags_with_args"
+        local _scope="_root"
         if [[ -n "$subcmd" ]]; then
             flags_with_args_file="$cache_dir/${subcmd}_flags_with_args"
+            _scope="$subcmd"
         fi
         if [[ -f "$flags_with_args_file" ]] && grep -qx -- "$prev" "$flags_with_args_file"; then
-            _claude_complete_flag_arg "$prev" "$cur"
+            _claude_complete_flag_arg "$prev" "$cur" "$_scope"
             return
         fi
     fi
@@ -408,7 +562,22 @@ _claude() {
 
         if [[ "$cur" == -* ]]; then
             if [[ -f "$cache_dir/${subcmd}_flags" ]]; then
-                COMPREPLY=( $(compgen -W "$(cat "$cache_dir/${subcmd}_flags")" -- "$cur") )
+                local candidates=()
+                while IFS= read -r line; do
+                    candidates+=("$line")
+                done < <(_claude_flag_candidates_with_descriptions \
+                    "$cache_dir/${subcmd}_flags" "$cur" \
+                    "$cache_dir/${subcmd}_flag_descriptions")
+                if (( ${#candidates[@]} == 1 )) || [[ ${COMP_TYPE:-9} == @(37|42) ]]; then
+                    # Single match or menu-complete: strip description so insertion is clean.
+                    COMPREPLY=()
+                    local c
+                    for c in "${candidates[@]}"; do
+                        COMPREPLY+=("${c%%$'\t'*}")
+                    done
+                else
+                    _claude_format_descriptions candidates
+                fi
             fi
         elif [[ -n "$sub_subcmd" ]]; then
             # Complete positional args for sub-subcommands
@@ -423,7 +592,22 @@ _claude() {
         if [[ "$cur" == -* ]]; then
             # Complete flags
             if [[ -f "$cache_dir/_root_flags" ]]; then
-                COMPREPLY=( $(compgen -W "$(cat "$cache_dir/_root_flags")" -- "$cur") )
+                local candidates=()
+                while IFS= read -r line; do
+                    candidates+=("$line")
+                done < <(_claude_flag_candidates_with_descriptions \
+                    "$cache_dir/_root_flags" "$cur" \
+                    "$cache_dir/_root_flag_descriptions")
+                if (( ${#candidates[@]} == 1 )) || [[ ${COMP_TYPE:-9} == @(37|42) ]]; then
+                    # Single match or menu-complete: strip description so insertion is clean.
+                    COMPREPLY=()
+                    local c
+                    for c in "${candidates[@]}"; do
+                        COMPREPLY+=("${c%%$'\t'*}")
+                    done
+                else
+                    _claude_format_descriptions candidates
+                fi
             fi
         else
             # Complete subcommands

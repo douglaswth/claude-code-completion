@@ -1,6 +1,42 @@
 # PowerShell completion for the claude CLI (Claude Code)
 # https://github.com/anthropics/claude-code
 
+# Cache schema version. Bump on any change to bundled-flag data, sidecar
+# file format, or cache layout. Bumps invalidate existing caches for the
+# same CLI version.
+$script:ClaudeCacheVersion = 2
+
+# Bundled flags last extended through CHANGELOG version: 2.1.123
+# (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
+#
+# Each entry has fields: Scope, Name, TakesArg, ArgType, Description
+#   Scope       — '_root' or a subcommand name (mcp, plugin, agents, …)
+#   Name        — flag form (e.g. --foo). Short forms are separate entries.
+#   TakesArg    — $true or $false
+#   ArgType     — 'none' | 'file' | 'dir' | 'choice:a,b,c' | 'unknown'
+#   Description — short text
+$script:ClaudeExtraFlags = @(
+    [pscustomobject]@{ Scope='_root'; Name='--capacity'; TakesArg=$true; ArgType='unknown'; Description='Max concurrent sessions for --remote-control' }
+    [pscustomobject]@{ Scope='_root'; Name='--cowork'; TakesArg=$false; ArgType='none'; Description='Enable co-worker mode (user-scope only)' }
+    [pscustomobject]@{ Scope='_root'; Name='--create-session-in-dir'; TakesArg=$false; ArgType='none'; Description='Pre-create a session in the current directory (--remote-control)' }
+    [pscustomobject]@{ Scope='_root'; Name='--dangerously-load-development-channels'; TakesArg=$false; ArgType='none'; Description='Allow loading MCP channel servers not on the approved allowlist' }
+    [pscustomobject]@{ Scope='_root'; Name='--dump-environment-variables'; TakesArg=$false; ArgType='none'; Description='Dump env vars as JSON and quit (debugging)' }
+    [pscustomobject]@{ Scope='_root'; Name='--handle-uri'; TakesArg=$true; ArgType='unknown'; Description='Handle a URI (used by OS protocol handler registration)' }
+    [pscustomobject]@{ Scope='_root'; Name='--max-thinking-tokens'; TakesArg=$true; ArgType='unknown'; Description='Maximum thinking tokens budget' }
+    [pscustomobject]@{ Scope='_root'; Name='--multi-turn'; TakesArg=$false; ArgType='none'; Description='Enable multi-turn conversation mode' }
+    [pscustomobject]@{ Scope='_root'; Name='--multi-turn-context'; TakesArg=$true; ArgType='unknown'; Description='Context for multi-turn mode' }
+    [pscustomobject]@{ Scope='_root'; Name='--multi-turn-model'; TakesArg=$true; ArgType='unknown'; Description='Model override for multi-turn mode' }
+    [pscustomobject]@{ Scope='_root'; Name='--no-create-session-in-dir'; TakesArg=$false; ArgType='none'; Description='Do not pre-create a session in the current directory (--remote-control)' }
+    [pscustomobject]@{ Scope='_root'; Name='--plan-mode-instructions'; TakesArg=$true; ArgType='unknown'; Description='Custom instructions for plan mode (only with --print)' }
+    [pscustomobject]@{ Scope='_root'; Name='--plan-mode-required'; TakesArg=$false; ArgType='none'; Description='Require plan mode for the session' }
+    [pscustomobject]@{ Scope='_root'; Name='--remote-control'; TakesArg=$true; ArgType='unknown'; Description='Connect local environment to claude.ai/code for remote sessions' }
+    [pscustomobject]@{ Scope='_root'; Name='--resume-session-at'; TakesArg=$true; ArgType='unknown'; Description='Resume a session from a specific message ID (requires --resume)' }
+    [pscustomobject]@{ Scope='_root'; Name='--rewind-files'; TakesArg=$true; ArgType='unknown'; Description='Rewind files to a given message ID (requires --resume)' }
+    [pscustomobject]@{ Scope='_root'; Name='--session-mirror'; TakesArg=$false; ArgType='none'; Description='Mirror local sessions to claude.ai as view-only' }
+    [pscustomobject]@{ Scope='_root'; Name='--spawn'; TakesArg=$true; ArgType='choice:same-dir,worktree,session'; Description='Spawn mode for --remote-control sessions' }
+    [pscustomobject]@{ Scope='_root'; Name='--thinking-display'; TakesArg=$true; ArgType='unknown'; Description='Control how thinking content is displayed' }
+)
+
 function global:_ClaudeVersion {
     $output = claude --version 2>$null
     if ($output) {
@@ -21,7 +57,8 @@ function global:_ClaudeCacheBase {
 function global:_ClaudeCacheDir {
     $version = _ClaudeVersion
     $base = _ClaudeCacheBase
-    Join-Path (Join-Path (Join-Path $base 'claude-code-completion') 'powershell') $version
+    $key = "$version-c$($script:ClaudeCacheVersion)"
+    Join-Path (Join-Path (Join-Path $base 'claude-code-completion') 'powershell') $key
 }
 
 function global:_ClaudeEnsureCache {
@@ -36,9 +73,9 @@ function global:_ClaudeCleanupOldCache {
 
     if (-not (Test-Path $baseDir)) { return }
 
-    $currentVersion = _ClaudeVersion
+    $currentKey = "$(_ClaudeVersion)-c$($script:ClaudeCacheVersion)"
     Get-ChildItem -Path $baseDir -Directory | Where-Object {
-        $_.Name -ne $currentVersion
+        $_.Name -ne $currentKey
     } | Remove-Item -Recurse -Force
 }
 
@@ -66,6 +103,21 @@ function global:_ClaudeBuildCache {
         Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags_with_args") -Value @(_ClaudeParseFlagsWithArgs -HelpLines $subHelpLines)
         Set-Content -Path (Join-Path $cacheDir "${subcmd}_flag_descriptions") -Value @(_ClaudeParseFlagDescriptions -HelpLines $subHelpLines)
         Set-Content -Path (Join-Path $cacheDir "${subcmd}_subcommands") -Value @(_ClaudeParseSubcommands -HelpLines $subHelpLines)
+    }
+
+    # Merge bundled flags into the cache files (skip ones already present from --help).
+    foreach ($entry in $script:ClaudeExtraFlags) {
+        if (-not $entry) { continue }
+        $flagsFile = Join-Path $cacheDir "$($entry.Scope)_flags"
+        if (-not (Test-Path $flagsFile)) { continue }
+        $existing = @(Get-Content $flagsFile)
+        if ($existing -contains $entry.Name) { continue }
+        Add-Content -Path $flagsFile -Value $entry.Name
+        if ($entry.TakesArg) {
+            Add-Content -Path (Join-Path $cacheDir "$($entry.Scope)_flags_with_args") -Value $entry.Name
+        }
+        Add-Content -Path (Join-Path $cacheDir "$($entry.Scope)_flag_descriptions") -Value "$($entry.Name)`t$($entry.Description)"
+        Add-Content -Path (Join-Path $cacheDir "$($entry.Scope)_flag_arg_types") -Value "$($entry.Name)`t$($entry.ArgType)"
     }
 
     _ClaudeCleanupOldCache
@@ -117,10 +169,11 @@ function global:_ClaudeParseFlagDescriptions {
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
         if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s+.*?\s{2,}(\S.+)') {
-            "$($Matches[1])`t$($Matches[3])"
-            "$($Matches[2])`t$($Matches[3])"
+            $desc = $Matches[3].TrimEnd()
+            "$($Matches[1])`t$desc"
+            "$($Matches[2])`t$desc"
         } elseif ($line -match '^\s+(--[a-zA-Z][-a-zA-Z]*).*?\s{2,}(\S.+)') {
-            "$($Matches[1])`t$($Matches[2])"
+            "$($Matches[1])`t$($Matches[2].TrimEnd())"
         }
     }
 }
@@ -135,8 +188,22 @@ $script:_ClaudeKnownModels = @(
     'claude-haiku-4-5-20251001'
 )
 
+function global:_ClaudeLookupArgType {
+    param([string]$Flag, [string]$Scope)
+    $cacheDir = _ClaudeCacheDir
+    $file = Join-Path $cacheDir "${Scope}_flag_arg_types"
+    if (-not (Test-Path $file)) { return $null }
+    foreach ($line in Get-Content $file) {
+        $parts = $line -split "`t", 2
+        if ($parts.Count -eq 2 -and $parts[0] -eq $Flag) {
+            return $parts[1]
+        }
+    }
+    return $null
+}
+
 function global:_ClaudeCompleteFlagArg {
-    param([string]$Flag, [string]$WordToComplete)
+    param([string]$Flag, [string]$WordToComplete, [string]$Scope = '_root')
 
     switch ($Flag) {
         '--model' {
@@ -192,10 +259,28 @@ function global:_ClaudeCompleteFlagArg {
             }
         }
         default {
-            # Unknown flag arg — default to file completion
-            Get-ChildItem -Path "$WordToComplete*" -ErrorAction SilentlyContinue | ForEach-Object {
-                $type = if ($_.PSIsContainer) { 'ProviderContainer' } else { 'ProviderItem' }
-                [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, $type, $_.FullName)
+            $argType = _ClaudeLookupArgType -Flag $Flag -Scope $Scope
+            switch -Wildcard ($argType) {
+                'dir' {
+                    Get-ChildItem -Path "$WordToComplete*" -Directory -ErrorAction SilentlyContinue |
+                        ForEach-Object {
+                            [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, 'ProviderContainer', $_.FullName)
+                        }
+                }
+                'choice:*' {
+                    $choices = $argType.Substring('choice:'.Length) -split ','
+                    $choices | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+                        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+                    }
+                }
+                'none' { }
+                default {
+                    Get-ChildItem -Path "$WordToComplete*" -ErrorAction SilentlyContinue |
+                        ForEach-Object {
+                            $type = if ($_.PSIsContainer) { 'ProviderContainer' } else { 'ProviderItem' }
+                            [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, $type, $_.FullName)
+                        }
+                }
             }
         }
     }
@@ -381,7 +466,8 @@ function global:_ClaudeComplete {
             Join-Path $cacheDir '_root_flags_with_args'
         }
         if ((Test-Path $flagsWithArgsFile) -and ((Get-Content $flagsWithArgsFile) -contains $prev)) {
-            _ClaudeCompleteFlagArg -Flag $prev -WordToComplete $WordToComplete
+            $scopeArg = if ($subcmd) { $subcmd } else { '_root' }
+            _ClaudeCompleteFlagArg -Flag $prev -WordToComplete $WordToComplete -Scope $scopeArg
             return
         }
     }

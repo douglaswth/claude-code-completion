@@ -118,3 +118,14 @@ function test_mcp_subcommand_shows_mcp_subcommands() {
     assert_contains "add" "$result"
     assert_contains "list" "$result"
 }
+
+function test_flag_completion_renders_descriptions_when_multiple_match() {
+    # When multiple flags match, descriptions render via the Cobra/kubectl
+    # `--flag    # description` formatter. Single-match case strips the
+    # description for clean insertion (covered by existing single-match tests).
+    local result
+    result="$(simulate_completion "claude --")"
+    # Several long flags match "--" in the mock; --model has description
+    # "Model for session". The formatter renders "--model    # Model for session".
+    assert_contains "Model for session" "$result"
+}

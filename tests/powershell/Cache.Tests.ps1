@@ -45,6 +45,11 @@ Describe 'Cache management' {
             $dir = _ClaudeCacheDir
             $dir | Should -BeLike '*1.0.0*'
         }
+
+        It 'includes schema version suffix in dir name' {
+            $dir = _ClaudeCacheDir
+            (Split-Path $dir -Leaf) | Should -Match '^[0-9]+\.[0-9]+\.[0-9]+-c[0-9]+$'
+        }
     }
 
     Context '_ClaudeEnsureCache' {
@@ -59,24 +64,42 @@ Describe 'Cache management' {
         It 'removes old version directories' {
             _ClaudeEnsureCache
             $baseDir = Join-Path (Join-Path $script:TestCacheDir 'claude-code-completion') 'powershell'
-            New-Item -ItemType Directory -Path (Join-Path $baseDir '0.9.0') -Force | Out-Null
-            New-Item -ItemType Directory -Path (Join-Path $baseDir '0.8.0') -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $baseDir '0.9.0-c1') -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $baseDir '0.8.0-c1') -Force | Out-Null
 
             _ClaudeCleanupOldCache
 
-            Test-Path (Join-Path $baseDir '0.9.0') | Should -BeFalse
-            Test-Path (Join-Path $baseDir '0.8.0') | Should -BeFalse
+            Test-Path (Join-Path $baseDir '0.9.0-c1') | Should -BeFalse
+            Test-Path (Join-Path $baseDir '0.8.0-c1') | Should -BeFalse
         }
 
         It 'preserves the current version directory' {
             _ClaudeEnsureCache
             $dir = _ClaudeCacheDir
             $baseDir = Join-Path (Join-Path $script:TestCacheDir 'claude-code-completion') 'powershell'
-            New-Item -ItemType Directory -Path (Join-Path $baseDir '0.9.0') -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $baseDir '0.9.0-c1') -Force | Out-Null
 
             _ClaudeCleanupOldCache
 
             Test-Path $dir | Should -BeTrue
+        }
+    }
+
+    Context '_ClaudeCleanupOldCache schema version' {
+        It 'removes directories for old schema versions' {
+            _ClaudeEnsureCache
+            $baseDir = Join-Path (Join-Path $script:TestCacheDir 'claude-code-completion') 'powershell'
+            New-Item -ItemType Directory -Path (Join-Path $baseDir '1.0.0-c0') -Force | Out-Null
+            _ClaudeCleanupOldCache
+            Test-Path (Join-Path $baseDir '1.0.0-c0') | Should -BeFalse
+        }
+
+        It 'removes pre-schema directory names' {
+            _ClaudeEnsureCache
+            $baseDir = Join-Path (Join-Path $script:TestCacheDir 'claude-code-completion') 'powershell'
+            New-Item -ItemType Directory -Path (Join-Path $baseDir '1.0.0') -Force | Out-Null
+            _ClaudeCleanupOldCache
+            Test-Path (Join-Path $baseDir '1.0.0') | Should -BeFalse
         }
     }
 
