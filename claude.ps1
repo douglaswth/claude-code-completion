@@ -4,9 +4,9 @@
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-$script:ClaudeCacheVersion = 2
+$script:ClaudeCacheVersion = 3
 
-# Bundled flags last extended through CHANGELOG version: 2.1.123
+# Bundled flags last extended through CHANGELOG version: 2.1.159
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Each entry has fields: Scope, Name, TakesArg, ArgType, Description
@@ -16,11 +16,14 @@ $script:ClaudeCacheVersion = 2
 #   ArgType     — 'none' | 'file' | 'dir' | 'choice:a,b,c' | 'unknown'
 #   Description — short text
 $script:ClaudeExtraFlags = @(
+    [pscustomobject]@{ Scope='_root'; Name='--bg'; TakesArg=$false; ArgType='none'; Description='Run the session in the background' }
     [pscustomobject]@{ Scope='_root'; Name='--capacity'; TakesArg=$true; ArgType='unknown'; Description='Max concurrent sessions for --remote-control' }
+    [pscustomobject]@{ Scope='_root'; Name='--channels'; TakesArg=$true; ArgType='unknown'; Description='Approved channel servers for this session' }
     [pscustomobject]@{ Scope='_root'; Name='--cowork'; TakesArg=$false; ArgType='none'; Description='Enable co-worker mode (user-scope only)' }
     [pscustomobject]@{ Scope='_root'; Name='--create-session-in-dir'; TakesArg=$false; ArgType='none'; Description='Pre-create a session in the current directory (--remote-control)' }
     [pscustomobject]@{ Scope='_root'; Name='--dangerously-load-development-channels'; TakesArg=$false; ArgType='none'; Description='Allow loading MCP channel servers not on the approved allowlist' }
     [pscustomobject]@{ Scope='_root'; Name='--dump-environment-variables'; TakesArg=$false; ArgType='none'; Description='Dump env vars as JSON and quit (debugging)' }
+    [pscustomobject]@{ Scope='_root'; Name='--exec'; TakesArg=$true; ArgType='unknown'; Description='Command to execute in a background session (with --bg)' }
     [pscustomobject]@{ Scope='_root'; Name='--handle-uri'; TakesArg=$true; ArgType='unknown'; Description='Handle a URI (used by OS protocol handler registration)' }
     [pscustomobject]@{ Scope='_root'; Name='--max-thinking-tokens'; TakesArg=$true; ArgType='unknown'; Description='Maximum thinking tokens budget' }
     [pscustomobject]@{ Scope='_root'; Name='--multi-turn'; TakesArg=$false; ArgType='none'; Description='Enable multi-turn conversation mode' }
@@ -180,11 +183,12 @@ function global:_ClaudeParseFlagDescriptions {
 
 $script:_ClaudeKnownModels = @(
     'sonnet', 'opus', 'haiku',
-    'claude-sonnet-4-5-20250514',
+    'claude-sonnet-4-5-20250929',
     'claude-sonnet-4-6',
-    'claude-opus-4-5-20250514',
+    'claude-opus-4-5-20251101',
     'claude-opus-4-6',
     'claude-opus-4-7',
+    'claude-opus-4-8',
     'claude-haiku-4-5-20251001'
 )
 
