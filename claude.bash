@@ -16,9 +16,9 @@ fi
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-_CLAUDE_CACHE_VERSION=2
+_CLAUDE_CACHE_VERSION=3
 
-# Bundled flags last extended through CHANGELOG version: 2.1.123
+# Bundled flags last extended through CHANGELOG version: 2.1.159
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Format: scope<TAB>name<TAB>takes_arg<TAB>arg_type<TAB>description
@@ -28,11 +28,14 @@ _CLAUDE_CACHE_VERSION=2
 #   arg_type  — none | file | dir | choice:a,b,c | unknown
 #   description — short text; no embedded tabs
 _CLAUDE_EXTRA_FLAGS=(
+    $'_root\t--bg\t0\tnone\tRun the session in the background'
     $'_root\t--capacity\t1\tunknown\tMax concurrent sessions for --remote-control'
+    $'_root\t--channels\t1\tunknown\tApproved channel servers for this session'
     $'_root\t--cowork\t0\tnone\tEnable co-worker mode (user-scope only)'
     $'_root\t--create-session-in-dir\t0\tnone\tPre-create a session in the current directory (--remote-control)'
     $'_root\t--dangerously-load-development-channels\t0\tnone\tAllow loading MCP channel servers not on the approved allowlist'
     $'_root\t--dump-environment-variables\t0\tnone\tDump env vars as JSON and quit (debugging)'
+    $'_root\t--exec\t1\tunknown\tCommand to execute in a background session (with --bg)'
     $'_root\t--handle-uri\t1\tunknown\tHandle a URI (used by OS protocol handler registration)'
     $'_root\t--max-thinking-tokens\t1\tunknown\tMaximum thinking tokens budget'
     $'_root\t--multi-turn\t0\tnone\tEnable multi-turn conversation mode'
@@ -349,11 +352,12 @@ _claude_complete_sessions() {
 # Hardcoded model IDs (update when new models are released)
 _CLAUDE_KNOWN_MODELS=(
     sonnet opus haiku
-    claude-sonnet-4-5-20250514
+    claude-sonnet-4-5-20250929
     claude-sonnet-4-6
-    claude-opus-4-5-20250514
+    claude-opus-4-5-20251101
     claude-opus-4-6
     claude-opus-4-7
+    claude-opus-4-8
     claude-haiku-4-5-20251001
 )
 
