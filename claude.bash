@@ -61,13 +61,20 @@ _claude_parse_extra_flag_record() {
 }
 
 # Modification time of a file as a Unix timestamp, portable across the
-# FreeBSD/macOS (`stat -f %m`) and GNU/Linux (`stat -c %Y`) stat variants.
+# GNU/Linux (`stat -c %Y`) and FreeBSD/macOS (`stat -f %m`) stat variants.
+# The unsupported variant exits non-zero on each platform, so each probe
+# is guarded inside the `if` condition (exempt from errexit/ERR traps) and
+# the function always returns 0 — callers run it inside command
+# substitutions under bashunit's `set -eE` hook harness, where a bare
+# failing assignment would otherwise abort the whole hook.
 _claude_mtime() {
     local file="$1" m
-    m="$(stat -f %m "$file" 2>/dev/null)"
-    [[ "$m" =~ ^[0-9]+$ ]] && { echo "$m"; return; }
-    m="$(stat -c %Y "$file" 2>/dev/null)"
-    [[ "$m" =~ ^[0-9]+$ ]] && echo "$m"
+    if m="$(stat -c %Y "$file" 2>/dev/null)" && [[ "$m" =~ ^[0-9]+$ ]]; then
+        printf '%s\n' "$m"
+    elif m="$(stat -f %m "$file" 2>/dev/null)" && [[ "$m" =~ ^[0-9]+$ ]]; then
+        printf '%s\n' "$m"
+    fi
+    return 0
 }
 
 # Resolve the claude CLI version. `claude --version` is a slow Node

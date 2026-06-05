@@ -6,22 +6,46 @@ BeforeAll {
 Describe '_ClaudeVersion' {
     BeforeEach {
         # Back the `claude` command with a real on-disk executable whose
-        # --version invocations are counted (each appends to a file). This
-        # lets us prove the result is memoized (no Node respawn per tab) and
-        # that a realistic binary change — a new mtime, as an upgrade would
-        # produce — correctly invalidates the memo.
+        # --version invocations are counted (each appends one byte to a
+        # file). This lets us prove the result is memoized (no Node respawn
+        # per tab) and that a realistic binary change — a new mtime, as an
+        # upgrade would produce — correctly invalidates the memo.
+        #
+        # Windows can't run a `#!/bin/sh` script, so emit a `.cmd` batch mock
+        # there and a shell script everywhere else. (Windows PowerShell 5.1
+        # lacks $IsWindows, so fall back to the PS version for detection.)
+        $script:OnWindows = ($PSVersionTable.PSVersion.Major -lt 6) -or $IsWindows
         $script:ExeDir = Join-Path $TestDrive "bin-$([guid]::NewGuid())"
         New-Item -ItemType Directory -Path $script:ExeDir | Out-Null
         $script:Counter = Join-Path $script:ExeDir 'calls'
-        $script:Exe = Join-Path $script:ExeDir 'claude'
-        @"
+        if ($script:OnWindows) {
+            $script:Exe = Join-Path $script:ExeDir 'claude.cmd'
+            # `<nul set /p=x` appends exactly one byte (no newline), so the
+            # counter length equals the invocation count.
+            @"
+@echo off
+if "%~1"=="--version" goto version
+if "%~1"=="--help" goto help
+goto :eof
+:version
+<nul set /p=x>>"$($script:Counter)"
+echo 1.0.0 (Claude Code)
+goto :eof
+:help
+echo Usage: claude
+goto :eof
+"@ | Set-Content -Path $script:Exe
+        } else {
+            $script:Exe = Join-Path $script:ExeDir 'claude'
+            @"
 #!/bin/sh
 case "`$*" in
   "--version") printf 'x' >> "$($script:Counter)"; echo "1.0.0 (Claude Code)";;
   "--help") echo "Usage: claude";;
 esac
 "@ | Set-Content -Path $script:Exe -NoNewline
-        chmod +x $script:Exe
+            chmod +x $script:Exe
+        }
         # Force `claude` to resolve to this mock executable: drop any function
         # mock left by other test files, and restrict PATH to only this dir so
         # the real installed CLI can't win. NOTE: a `global:`-qualified Function
