@@ -4,7 +4,7 @@
 
 Two related fixes to the completion scripts (`claude.bash`, `claude.ps1`):
 
-1. **Performance.** Every tab press resolved the CLI version by spawning `claude --version`, a Node cold start of ~1.2–2.0s. Tab completion should be effectively instant after the first press in a shell session.
+1. **Performance.** Every tab press resolved the CLI version by spawning `claude --version`, a process cold start that — on the FreeBSD host where this was measured — costs ~1.2–2.0s (see [Benchmark results](#benchmark-results) for why FreeBSD is the worst case). Tab completion should be effectively instant after the first press in a shell session.
 2. **Cache robustness.** Cache builds wrote files directly into the live cache directory and gated completion on the directory merely existing. An interrupted or concurrent build left a half-populated directory that subsequent completions treated as ready, producing missing or partial completions until the next CLI upgrade.
 
 The bash side landed first; this design also covers mirroring both fixes into PowerShell so the two scripts stay in lockstep.
@@ -69,7 +69,7 @@ Completion previously proceeded if the cache directory existed. With direct-to-f
 
 ## Benchmark results
 
-Measured against the pre-memoization scripts installed from the user's profile (`~/.local/share/bash-completion/completions/claude`, `~/.config/powershell/completions/claude.ps1`) as the baseline:
+**Measured on FreeBSD**, against the pre-memoization scripts installed from the user's profile (`~/.local/share/bash-completion/completions/claude`, `~/.config/powershell/completions/claude.ps1`) as the baseline:
 
 | | Before (per tab) | After (steady state) |
 |---|---|---|
@@ -77,6 +77,8 @@ Measured against the pre-memoization scripts installed from the user's profile (
 | PowerShell | 1.206 s | 7.9 ms |
 
 A warm `claude --version` is ~1.2–1.5s (cold ~4.9s). After the change, only the first tab press in a shell session pays that cost; every subsequent press is served from the memo. That is roughly a 250–350× speedup on steady-state tab latency.
+
+These absolute numbers are characteristic of FreeBSD specifically. FreeBSD is not an officially supported `claude` platform, so it has no native build and runs the CLI through plain Node — paying a full Node cold start on every invocation. The official Linux, macOS, and Windows builds ship `claude` as a bundled executable that appears to optimize process/Node startup, so their per-invocation cost is lower and the "before" figures there would be smaller. The qualitative win is platform-independent, though: regardless of build, the old code spawned a fresh `claude --version` process on every tab press, and memoization removes that spawn from the steady-state path entirely. FreeBSD is simply where the cost — and therefore the payoff — is largest.
 
 ## Tests
 
