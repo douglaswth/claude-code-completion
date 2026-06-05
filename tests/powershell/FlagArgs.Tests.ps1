@@ -86,6 +86,39 @@ Describe 'Flag argument completion' {
     }
 }
 
+Describe 'Optional-arg flag dispatch' {
+    # "dash -> flags, else arg": after an optional-arg flag (--resume [value]),
+    # a current word starting with '-' offers flags; empty or non-dash completes
+    # the argument.
+
+    It 'falls through to flags on a double-dash word' {
+        $results = Get-CompletionText 'claude --resume --'
+        $results | Should -Contain '--model'
+        $results | Should -Contain '--print'
+    }
+
+    It 'falls through to flags on a single-dash word' {
+        $results = Get-CompletionText 'claude --resume -'
+        $results | Should -Contain '-p'
+        $results | Should -Contain '--print'
+    }
+
+    It 'completes the argument (not flags) on an empty word' {
+        $results = Get-CompletionText 'claude --resume '
+        $results | Should -Not -Contain '--model'
+    }
+
+    It 'completes the argument (not flags) on a non-dash word' {
+        $results = Get-CompletionText 'claude --resume sess'
+        $results | Should -Not -Contain '--model'
+    }
+
+    It 'does not fall through for a required-arg flag on a dash word' {
+        $results = Get-CompletionText 'claude --model --'
+        $results | Should -Not -Contain '--print'
+    }
+}
+
 Describe 'Filesystem flag completion' {
     BeforeAll {
         $script:CompDir = (Get-Item $TestDrive).FullName

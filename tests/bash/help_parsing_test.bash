@@ -20,6 +20,8 @@ Options:
   --model <model>                Model for session
   -p, --print                    Print response and exit
   -r, --resume [value]           Resume a conversation by session ID
+  --from-pr [value]              Resume a session linked to a PR
+  --mcp-debug                    [DEPRECATED. Use --debug instead] MCP debug
   -h, --help                     Display help
   -v, --version                  Output the version number
 
@@ -119,6 +121,40 @@ function test_flags_with_args_contains_model() {
 
 function test_flags_with_args_excludes_continue() {
     assert_file_not_contains "$CACHE_DIR/_root_flags_with_args" "--continue"
+}
+
+function test_flags_with_args_includes_optional_arg_resume() {
+    # An optional-arg flag still takes an argument, so it belongs here too.
+    assert_file_contains "$CACHE_DIR/_root_flags_with_args" "--resume"
+}
+
+function test_flags_with_args_excludes_flag_whose_description_starts_with_bracket() {
+    # --mcp-debug takes no argument; its description merely begins with
+    # "[DEPRECATED…]". The single-space placeholder rule must not treat that
+    # bracket as an argument.
+    assert_file_not_contains "$CACHE_DIR/_root_flags_with_args" "--mcp-debug"
+}
+
+function test_optional_args_file_exists() {
+    assert_file_exists "$CACHE_DIR/_root_flags_with_optional_args"
+}
+
+function test_optional_args_contains_resume_long_and_short() {
+    assert_file_contains "$CACHE_DIR/_root_flags_with_optional_args" "--resume"
+    assert_file_contains "$CACHE_DIR/_root_flags_with_optional_args" "-r"
+}
+
+function test_optional_args_contains_long_only_flag() {
+    # A long-only optional-arg flag (no short form) exercises the elif branch.
+    assert_file_contains "$CACHE_DIR/_root_flags_with_optional_args" "--from-pr"
+}
+
+function test_optional_args_excludes_required_arg_model() {
+    assert_file_not_contains "$CACHE_DIR/_root_flags_with_optional_args" "--model"
+}
+
+function test_optional_args_excludes_bracket_description_flag() {
+    assert_file_not_contains "$CACHE_DIR/_root_flags_with_optional_args" "--mcp-debug"
 }
 
 function test_mcp_subcommands_file_exists() {

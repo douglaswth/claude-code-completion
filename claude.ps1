@@ -4,7 +4,7 @@
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-$script:ClaudeCacheVersion = 3
+$script:ClaudeCacheVersion = 4
 
 # Bundled flags last extended through CHANGELOG version: 2.1.159
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
@@ -12,32 +12,33 @@ $script:ClaudeCacheVersion = 3
 # Each entry has fields: Scope, Name, TakesArg, ArgType, Description
 #   Scope       — '_root' or a subcommand name (mcp, plugin, agents, …)
 #   Name        — flag form (e.g. --foo). Short forms are separate entries.
-#   TakesArg    — $true or $false
+#   TakesArg    — 'none' | 'required' | 'optional'
+#                 (required = <value>; optional = [value], may be omitted)
 #   ArgType     — 'none' | 'file' | 'dir' | 'choice:a,b,c' | 'unknown'
 #   Description — short text
 $script:ClaudeExtraFlags = @(
-    [pscustomobject]@{ Scope='_root'; Name='--bg'; TakesArg=$false; ArgType='none'; Description='Run the session in the background' }
-    [pscustomobject]@{ Scope='_root'; Name='--capacity'; TakesArg=$true; ArgType='unknown'; Description='Max concurrent sessions for --remote-control' }
-    [pscustomobject]@{ Scope='_root'; Name='--channels'; TakesArg=$true; ArgType='unknown'; Description='Approved channel servers for this session' }
-    [pscustomobject]@{ Scope='_root'; Name='--cowork'; TakesArg=$false; ArgType='none'; Description='Enable co-worker mode (user-scope only)' }
-    [pscustomobject]@{ Scope='_root'; Name='--create-session-in-dir'; TakesArg=$false; ArgType='none'; Description='Pre-create a session in the current directory (--remote-control)' }
-    [pscustomobject]@{ Scope='_root'; Name='--dangerously-load-development-channels'; TakesArg=$false; ArgType='none'; Description='Allow loading MCP channel servers not on the approved allowlist' }
-    [pscustomobject]@{ Scope='_root'; Name='--dump-environment-variables'; TakesArg=$false; ArgType='none'; Description='Dump env vars as JSON and quit (debugging)' }
-    [pscustomobject]@{ Scope='_root'; Name='--exec'; TakesArg=$true; ArgType='unknown'; Description='Command to execute in a background session (with --bg)' }
-    [pscustomobject]@{ Scope='_root'; Name='--handle-uri'; TakesArg=$true; ArgType='unknown'; Description='Handle a URI (used by OS protocol handler registration)' }
-    [pscustomobject]@{ Scope='_root'; Name='--max-thinking-tokens'; TakesArg=$true; ArgType='unknown'; Description='Maximum thinking tokens budget' }
-    [pscustomobject]@{ Scope='_root'; Name='--multi-turn'; TakesArg=$false; ArgType='none'; Description='Enable multi-turn conversation mode' }
-    [pscustomobject]@{ Scope='_root'; Name='--multi-turn-context'; TakesArg=$true; ArgType='unknown'; Description='Context for multi-turn mode' }
-    [pscustomobject]@{ Scope='_root'; Name='--multi-turn-model'; TakesArg=$true; ArgType='unknown'; Description='Model override for multi-turn mode' }
-    [pscustomobject]@{ Scope='_root'; Name='--no-create-session-in-dir'; TakesArg=$false; ArgType='none'; Description='Do not pre-create a session in the current directory (--remote-control)' }
-    [pscustomobject]@{ Scope='_root'; Name='--plan-mode-instructions'; TakesArg=$true; ArgType='unknown'; Description='Custom instructions for plan mode (only with --print)' }
-    [pscustomobject]@{ Scope='_root'; Name='--plan-mode-required'; TakesArg=$false; ArgType='none'; Description='Require plan mode for the session' }
-    [pscustomobject]@{ Scope='_root'; Name='--remote-control'; TakesArg=$true; ArgType='unknown'; Description='Connect local environment to claude.ai/code for remote sessions' }
-    [pscustomobject]@{ Scope='_root'; Name='--resume-session-at'; TakesArg=$true; ArgType='unknown'; Description='Resume a session from a specific message ID (requires --resume)' }
-    [pscustomobject]@{ Scope='_root'; Name='--rewind-files'; TakesArg=$true; ArgType='unknown'; Description='Rewind files to a given message ID (requires --resume)' }
-    [pscustomobject]@{ Scope='_root'; Name='--session-mirror'; TakesArg=$false; ArgType='none'; Description='Mirror local sessions to claude.ai as view-only' }
-    [pscustomobject]@{ Scope='_root'; Name='--spawn'; TakesArg=$true; ArgType='choice:same-dir,worktree,session'; Description='Spawn mode for --remote-control sessions' }
-    [pscustomobject]@{ Scope='_root'; Name='--thinking-display'; TakesArg=$true; ArgType='unknown'; Description='Control how thinking content is displayed' }
+    [pscustomobject]@{ Scope='_root'; Name='--bg'; TakesArg='none'; ArgType='none'; Description='Run the session in the background' }
+    [pscustomobject]@{ Scope='_root'; Name='--capacity'; TakesArg='required'; ArgType='unknown'; Description='Max concurrent sessions for --remote-control' }
+    [pscustomobject]@{ Scope='_root'; Name='--channels'; TakesArg='required'; ArgType='unknown'; Description='Approved channel servers for this session' }
+    [pscustomobject]@{ Scope='_root'; Name='--cowork'; TakesArg='none'; ArgType='none'; Description='Enable co-worker mode (user-scope only)' }
+    [pscustomobject]@{ Scope='_root'; Name='--create-session-in-dir'; TakesArg='none'; ArgType='none'; Description='Pre-create a session in the current directory (--remote-control)' }
+    [pscustomobject]@{ Scope='_root'; Name='--dangerously-load-development-channels'; TakesArg='none'; ArgType='none'; Description='Allow loading MCP channel servers not on the approved allowlist' }
+    [pscustomobject]@{ Scope='_root'; Name='--dump-environment-variables'; TakesArg='none'; ArgType='none'; Description='Dump env vars as JSON and quit (debugging)' }
+    [pscustomobject]@{ Scope='_root'; Name='--exec'; TakesArg='required'; ArgType='unknown'; Description='Command to execute in a background session (with --bg)' }
+    [pscustomobject]@{ Scope='_root'; Name='--handle-uri'; TakesArg='required'; ArgType='unknown'; Description='Handle a URI (used by OS protocol handler registration)' }
+    [pscustomobject]@{ Scope='_root'; Name='--max-thinking-tokens'; TakesArg='required'; ArgType='unknown'; Description='Maximum thinking tokens budget' }
+    [pscustomobject]@{ Scope='_root'; Name='--multi-turn'; TakesArg='none'; ArgType='none'; Description='Enable multi-turn conversation mode' }
+    [pscustomobject]@{ Scope='_root'; Name='--multi-turn-context'; TakesArg='required'; ArgType='unknown'; Description='Context for multi-turn mode' }
+    [pscustomobject]@{ Scope='_root'; Name='--multi-turn-model'; TakesArg='required'; ArgType='unknown'; Description='Model override for multi-turn mode' }
+    [pscustomobject]@{ Scope='_root'; Name='--no-create-session-in-dir'; TakesArg='none'; ArgType='none'; Description='Do not pre-create a session in the current directory (--remote-control)' }
+    [pscustomobject]@{ Scope='_root'; Name='--plan-mode-instructions'; TakesArg='required'; ArgType='unknown'; Description='Custom instructions for plan mode (only with --print)' }
+    [pscustomobject]@{ Scope='_root'; Name='--plan-mode-required'; TakesArg='none'; ArgType='none'; Description='Require plan mode for the session' }
+    [pscustomobject]@{ Scope='_root'; Name='--remote-control'; TakesArg='optional'; ArgType='unknown'; Description='Connect local environment to claude.ai/code for remote sessions' }
+    [pscustomobject]@{ Scope='_root'; Name='--resume-session-at'; TakesArg='required'; ArgType='unknown'; Description='Resume a session from a specific message ID (requires --resume)' }
+    [pscustomobject]@{ Scope='_root'; Name='--rewind-files'; TakesArg='required'; ArgType='unknown'; Description='Rewind files to a given message ID (requires --resume)' }
+    [pscustomobject]@{ Scope='_root'; Name='--session-mirror'; TakesArg='none'; ArgType='none'; Description='Mirror local sessions to claude.ai as view-only' }
+    [pscustomobject]@{ Scope='_root'; Name='--spawn'; TakesArg='required'; ArgType='choice:same-dir,worktree,session'; Description='Spawn mode for --remote-control sessions' }
+    [pscustomobject]@{ Scope='_root'; Name='--thinking-display'; TakesArg='required'; ArgType='unknown'; Description='Control how thinking content is displayed' }
 )
 
 function global:_ClaudeVersion {
@@ -113,6 +114,7 @@ function global:_ClaudeBuildCache {
     Set-Content -Path (Join-Path $buildDir '_root_help') -Value $helpOutput
     Set-Content -Path (Join-Path $buildDir '_root_flags') -Value @(_ClaudeParseFlags -HelpLines $helpLines)
     Set-Content -Path (Join-Path $buildDir '_root_flags_with_args') -Value @(_ClaudeParseFlagsWithArgs -HelpLines $helpLines)
+    Set-Content -Path (Join-Path $buildDir '_root_flags_with_optional_args') -Value @(_ClaudeParseFlagsWithOptionalArgs -HelpLines $helpLines)
     Set-Content -Path (Join-Path $buildDir '_root_flag_descriptions') -Value @(_ClaudeParseFlagDescriptions -HelpLines $helpLines)
     $subcommands = @(_ClaudeParseSubcommands -HelpLines $helpLines)
     Set-Content -Path (Join-Path $buildDir '_root_subcommands') -Value $subcommands
@@ -125,6 +127,7 @@ function global:_ClaudeBuildCache {
         $subHelpLines = @($subHelp -split "`n")
         Set-Content -Path (Join-Path $buildDir "${subcmd}_flags") -Value @(_ClaudeParseFlags -HelpLines $subHelpLines)
         Set-Content -Path (Join-Path $buildDir "${subcmd}_flags_with_args") -Value @(_ClaudeParseFlagsWithArgs -HelpLines $subHelpLines)
+        Set-Content -Path (Join-Path $buildDir "${subcmd}_flags_with_optional_args") -Value @(_ClaudeParseFlagsWithOptionalArgs -HelpLines $subHelpLines)
         Set-Content -Path (Join-Path $buildDir "${subcmd}_flag_descriptions") -Value @(_ClaudeParseFlagDescriptions -HelpLines $subHelpLines)
         Set-Content -Path (Join-Path $buildDir "${subcmd}_subcommands") -Value @(_ClaudeParseSubcommands -HelpLines $subHelpLines)
     }
@@ -137,8 +140,11 @@ function global:_ClaudeBuildCache {
         $existing = @(Get-Content $flagsFile)
         if ($existing -contains $entry.Name) { continue }
         Add-Content -Path $flagsFile -Value $entry.Name
-        if ($entry.TakesArg) {
+        if ($entry.TakesArg -ne 'none') {
             Add-Content -Path (Join-Path $buildDir "$($entry.Scope)_flags_with_args") -Value $entry.Name
+        }
+        if ($entry.TakesArg -eq 'optional') {
+            Add-Content -Path (Join-Path $buildDir "$($entry.Scope)_flags_with_optional_args") -Value $entry.Name
         }
         Add-Content -Path (Join-Path $buildDir "$($entry.Scope)_flag_descriptions") -Value "$($entry.Name)`t$($entry.Description)"
         Add-Content -Path (Join-Path $buildDir "$($entry.Scope)_flag_arg_types") -Value "$($entry.Name)`t$($entry.ArgType)"
@@ -165,12 +171,31 @@ function global:_ClaudeParseFlags {
 }
 
 function global:_ClaudeParseFlagsWithArgs {
+    # Flags that take an argument (required <value> or optional [value]). The
+    # placeholder follows the flag after a SINGLE space; a 2+ space gap instead
+    # introduces the description (e.g. "--mcp-debug   [DEPRECATED…]"), which must
+    # not be mistaken for an argument.
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
-        if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s+[<\[]') {
+        if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s[<\[]') {
             $Matches[1]
             $Matches[2]
-        } elseif ($line -match '^\s+(--[a-zA-Z][-a-zA-Z]*)\s+[<\[]') {
+        } elseif ($line -match '^\s+(--[a-zA-Z][-a-zA-Z]*)\s[<\[]') {
+            $Matches[1]
+        }
+    }
+}
+
+function global:_ClaudeParseFlagsWithOptionalArgs {
+    # Flags whose argument is OPTIONAL — shown as [value], not <value>. Same
+    # single-space rule as _ClaudeParseFlagsWithArgs so a description beginning
+    # with '[' is not mistaken for an optional argument.
+    param([string[]]$HelpLines)
+    foreach ($line in $HelpLines) {
+        if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s\[') {
+            $Matches[1]
+            $Matches[2]
+        } elseif ($line -match '^\s+(--[a-zA-Z][-a-zA-Z]*)\s\[') {
             $Matches[1]
         }
     }
@@ -498,10 +523,22 @@ function global:_ClaudeComplete {
         } else {
             Join-Path $cacheDir '_root_flags_with_args'
         }
+        $optionalArgsFile = if ($subcmd) {
+            Join-Path $cacheDir "${subcmd}_flags_with_optional_args"
+        } else {
+            Join-Path $cacheDir '_root_flags_with_optional_args'
+        }
         if ((Test-Path $flagsWithArgsFile) -and ((Get-Content $flagsWithArgsFile) -contains $prev)) {
-            $scopeArg = if ($subcmd) { $subcmd } else { '_root' }
-            _ClaudeCompleteFlagArg -Flag $prev -WordToComplete $WordToComplete -Scope $scopeArg
-            return
+            # For optional-arg flags, a current word that already starts with '-'
+            # means the user is typing the next flag, not the argument — fall
+            # through to normal flag/subcommand completion. Otherwise (empty or
+            # non-dash word) complete the flag's argument.
+            $isOptional = (Test-Path $optionalArgsFile) -and ((Get-Content $optionalArgsFile) -contains $prev)
+            if (-not ($isOptional -and $WordToComplete -like '-*')) {
+                $scopeArg = if ($subcmd) { $subcmd } else { '_root' }
+                _ClaudeCompleteFlagArg -Flag $prev -WordToComplete $WordToComplete -Scope $scopeArg
+                return
+            }
         }
     }
 

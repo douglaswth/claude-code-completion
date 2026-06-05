@@ -126,3 +126,43 @@ function test_plugin_dir_completes_directories() {
     assert_contains "subdir_two" "$result"
     assert_not_contains "file_alpha" "$result"
 }
+
+# --- Optional-arg flag dispatch (--resume [value]) --------------------------
+# "dash → flags, else arg": after an optional-arg flag, a current word starting
+# with '-' offers flags/subcommands; empty or non-dash completes the argument.
+
+function test_optional_flag_double_dash_falls_through_to_flags() {
+    local result
+    result="$(simulate_completion "claude --resume --")"
+    assert_contains "--model" "$result"
+    assert_contains "--print" "$result"
+}
+
+function test_optional_flag_single_dash_falls_through_to_flags() {
+    local result
+    result="$(simulate_completion "claude --resume -")"
+    assert_contains "-p" "$result"
+    assert_contains "--print" "$result"
+}
+
+function test_optional_flag_empty_word_completes_arg_not_flags() {
+    # Empty current word → argument completion (here, the session list, which is
+    # empty in this fixture), NOT flag fall-through.
+    local result
+    result="$(simulate_completion "claude --resume ")"
+    assert_not_contains "--model" "$result"
+}
+
+function test_optional_flag_nondash_word_completes_arg_not_flags() {
+    local result
+    result="$(simulate_completion "claude --resume sess")"
+    assert_not_contains "--model" "$result"
+}
+
+function test_required_flag_does_not_fall_through_on_dash() {
+    # A required-arg flag keeps consuming its argument; '--' must NOT offer
+    # other flags (model values simply don't match '--', so the result is empty).
+    local result
+    result="$(simulate_completion "claude --model --")"
+    assert_not_contains "--print" "$result"
+}
