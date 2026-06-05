@@ -16,7 +16,7 @@ fi
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-_CLAUDE_CACHE_VERSION=3
+_CLAUDE_CACHE_VERSION=4
 
 # Bundled flags last extended through CHANGELOG version: 2.1.159
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
@@ -24,32 +24,33 @@ _CLAUDE_CACHE_VERSION=3
 # Format: scope<TAB>name<TAB>takes_arg<TAB>arg_type<TAB>description
 #   scope     — "_root" or a subcommand name (mcp, plugin, agents, …)
 #   name      — flag form (e.g. --foo). Short forms are separate entries.
-#   takes_arg — 0 or 1
+#   takes_arg — none | required | optional
+#               (required = <value>; optional = [value], may be omitted)
 #   arg_type  — none | file | dir | choice:a,b,c | unknown
 #   description — short text; no embedded tabs
 _CLAUDE_EXTRA_FLAGS=(
-    $'_root\t--bg\t0\tnone\tRun the session in the background'
-    $'_root\t--capacity\t1\tunknown\tMax concurrent sessions for --remote-control'
-    $'_root\t--channels\t1\tunknown\tApproved channel servers for this session'
-    $'_root\t--cowork\t0\tnone\tEnable co-worker mode (user-scope only)'
-    $'_root\t--create-session-in-dir\t0\tnone\tPre-create a session in the current directory (--remote-control)'
-    $'_root\t--dangerously-load-development-channels\t0\tnone\tAllow loading MCP channel servers not on the approved allowlist'
-    $'_root\t--dump-environment-variables\t0\tnone\tDump env vars as JSON and quit (debugging)'
-    $'_root\t--exec\t1\tunknown\tCommand to execute in a background session (with --bg)'
-    $'_root\t--handle-uri\t1\tunknown\tHandle a URI (used by OS protocol handler registration)'
-    $'_root\t--max-thinking-tokens\t1\tunknown\tMaximum thinking tokens budget'
-    $'_root\t--multi-turn\t0\tnone\tEnable multi-turn conversation mode'
-    $'_root\t--multi-turn-context\t1\tunknown\tContext for multi-turn mode'
-    $'_root\t--multi-turn-model\t1\tunknown\tModel override for multi-turn mode'
-    $'_root\t--no-create-session-in-dir\t0\tnone\tDo not pre-create a session in the current directory (--remote-control)'
-    $'_root\t--plan-mode-instructions\t1\tunknown\tCustom instructions for plan mode (only with --print)'
-    $'_root\t--plan-mode-required\t0\tnone\tRequire plan mode for the session'
-    $'_root\t--remote-control\t1\tunknown\tConnect local environment to claude.ai/code for remote sessions'
-    $'_root\t--resume-session-at\t1\tunknown\tResume a session from a specific message ID (requires --resume)'
-    $'_root\t--rewind-files\t1\tunknown\tRewind files to a given message ID (requires --resume)'
-    $'_root\t--session-mirror\t0\tnone\tMirror local sessions to claude.ai as view-only'
-    $'_root\t--spawn\t1\tchoice:same-dir,worktree,session\tSpawn mode for --remote-control sessions'
-    $'_root\t--thinking-display\t1\tunknown\tControl how thinking content is displayed'
+    $'_root\t--bg\tnone\tnone\tRun the session in the background'
+    $'_root\t--capacity\trequired\tunknown\tMax concurrent sessions for --remote-control'
+    $'_root\t--channels\trequired\tunknown\tApproved channel servers for this session'
+    $'_root\t--cowork\tnone\tnone\tEnable co-worker mode (user-scope only)'
+    $'_root\t--create-session-in-dir\tnone\tnone\tPre-create a session in the current directory (--remote-control)'
+    $'_root\t--dangerously-load-development-channels\tnone\tnone\tAllow loading MCP channel servers not on the approved allowlist'
+    $'_root\t--dump-environment-variables\tnone\tnone\tDump env vars as JSON and quit (debugging)'
+    $'_root\t--exec\trequired\tunknown\tCommand to execute in a background session (with --bg)'
+    $'_root\t--handle-uri\trequired\tunknown\tHandle a URI (used by OS protocol handler registration)'
+    $'_root\t--max-thinking-tokens\trequired\tunknown\tMaximum thinking tokens budget'
+    $'_root\t--multi-turn\tnone\tnone\tEnable multi-turn conversation mode'
+    $'_root\t--multi-turn-context\trequired\tunknown\tContext for multi-turn mode'
+    $'_root\t--multi-turn-model\trequired\tunknown\tModel override for multi-turn mode'
+    $'_root\t--no-create-session-in-dir\tnone\tnone\tDo not pre-create a session in the current directory (--remote-control)'
+    $'_root\t--plan-mode-instructions\trequired\tunknown\tCustom instructions for plan mode (only with --print)'
+    $'_root\t--plan-mode-required\tnone\tnone\tRequire plan mode for the session'
+    $'_root\t--remote-control\toptional\tunknown\tConnect local environment to claude.ai/code for remote sessions'
+    $'_root\t--resume-session-at\trequired\tunknown\tResume a session from a specific message ID (requires --resume)'
+    $'_root\t--rewind-files\trequired\tunknown\tRewind files to a given message ID (requires --resume)'
+    $'_root\t--session-mirror\tnone\tnone\tMirror local sessions to claude.ai as view-only'
+    $'_root\t--spawn\trequired\tchoice:same-dir,worktree,session\tSpawn mode for --remote-control sessions'
+    $'_root\t--thinking-display\trequired\tunknown\tControl how thinking content is displayed'
 )
 
 # Split a tab-separated extra-flag record into its fields.
@@ -140,13 +141,31 @@ _claude_parse_flags() {
 }
 
 _claude_parse_flags_with_args() {
-    # Parse flags that take arguments (have <value> or [value] after them)
+    # Parse flags that take an argument (required <value> or optional [value]).
+    # The placeholder follows the flag after a SINGLE space; a 2+ space gap
+    # instead introduces the description (e.g. "--mcp-debug   [DEPRECATED…]"),
+    # which must not be mistaken for an argument.
     local line
     while IFS= read -r line; do
-        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]]+[\<\[] ]]; then
+        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][\<\[] ]]; then
             echo "${BASH_REMATCH[1]}"
             echo "${BASH_REMATCH[2]}"
-        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]]+[\<\[] ]]; then
+        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][\<\[] ]]; then
+            echo "${BASH_REMATCH[1]}"
+        fi
+    done
+}
+
+_claude_parse_flags_with_optional_args() {
+    # Parse flags whose argument is OPTIONAL — shown as [value], not <value>.
+    # Same single-space rule as _claude_parse_flags_with_args so a description
+    # beginning with '[' is not mistaken for an optional argument.
+    local line
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][[] ]]; then
+            echo "${BASH_REMATCH[1]}"
+            echo "${BASH_REMATCH[2]}"
+        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][[] ]]; then
             echo "${BASH_REMATCH[1]}"
         fi
     done
@@ -218,6 +237,7 @@ _claude_build_cache() {
     echo "$help_output" > "$build_dir/_root_help"
     echo "$help_output" | _claude_parse_flags > "$build_dir/_root_flags"
     echo "$help_output" | _claude_parse_flags_with_args > "$build_dir/_root_flags_with_args"
+    echo "$help_output" | _claude_parse_flags_with_optional_args > "$build_dir/_root_flags_with_optional_args"
     echo "$help_output" | _claude_parse_flag_descriptions > "$build_dir/_root_flag_descriptions"
     echo "$help_output" | _claude_parse_subcommands > "$build_dir/_root_subcommands"
 
@@ -229,6 +249,7 @@ _claude_build_cache() {
         sub_help="$(claude "$subcmd" --help 2>/dev/null)" || continue
         echo "$sub_help" | _claude_parse_flags > "$build_dir/${subcmd}_flags"
         echo "$sub_help" | _claude_parse_flags_with_args > "$build_dir/${subcmd}_flags_with_args"
+        echo "$sub_help" | _claude_parse_flags_with_optional_args > "$build_dir/${subcmd}_flags_with_optional_args"
         echo "$sub_help" | _claude_parse_flag_descriptions > "$build_dir/${subcmd}_flag_descriptions"
         echo "$sub_help" | _claude_parse_subcommands > "$build_dir/${subcmd}_subcommands"
     done < "$build_dir/_root_subcommands"
@@ -244,8 +265,11 @@ _claude_build_cache() {
             continue  # --help wins on overlap
         fi
         echo "$name" >> "$flags_file"
-        if [[ "$takes_arg" == "1" ]]; then
+        if [[ "$takes_arg" != "none" ]]; then
             echo "$name" >> "$build_dir/${scope}_flags_with_args"
+        fi
+        if [[ "$takes_arg" == "optional" ]]; then
+            echo "$name" >> "$build_dir/${scope}_flags_with_optional_args"
         fi
         printf '%s\t%s\n' "$name" "$desc" >> "$build_dir/${scope}_flag_descriptions"
         printf '%s\t%s\n' "$name" "$arg_type" >> "$build_dir/${scope}_flag_arg_types"
@@ -582,14 +606,24 @@ _claude() {
     # Check if previous word is a flag that takes an argument
     if [[ "$prev" == -* ]]; then
         local flags_with_args_file="$cache_dir/_root_flags_with_args"
+        local optional_args_file="$cache_dir/_root_flags_with_optional_args"
         local _scope="_root"
         if [[ -n "$subcmd" ]]; then
             flags_with_args_file="$cache_dir/${subcmd}_flags_with_args"
+            optional_args_file="$cache_dir/${subcmd}_flags_with_optional_args"
             _scope="$subcmd"
         fi
         if [[ -f "$flags_with_args_file" ]] && grep -qx -- "$prev" "$flags_with_args_file"; then
-            _claude_complete_flag_arg "$prev" "$cur" "$_scope"
-            return
+            # For optional-arg flags, a current word that already starts with '-'
+            # means the user is typing the next flag, not the argument — fall
+            # through to normal flag/subcommand completion. Otherwise (empty or
+            # non-dash word) complete the flag's argument.
+            if [[ "$cur" == -* && -f "$optional_args_file" ]] && grep -qx -- "$prev" "$optional_args_file"; then
+                : # fall through
+            else
+                _claude_complete_flag_arg "$prev" "$cur" "$_scope"
+                return
+            fi
         fi
     fi
 

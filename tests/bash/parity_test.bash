@@ -24,7 +24,7 @@ extract_ps_extra_flags() {
         local scope name ta arg_type desc
         scope=$(echo "$line" | sed -n "s/.*Scope='\([^']*\)'.*/\1/p")
         name=$(echo "$line"  | sed -n "s/.*Name='\([^']*\)'.*/\1/p")
-        if [[ "$line" == *'TakesArg=$true'* ]]; then ta=1; else ta=0; fi
+        ta=$(echo "$line" | sed -n "s/.*TakesArg='\([^']*\)'.*/\1/p")
         arg_type=$(echo "$line" | sed -n "s/.*ArgType='\([^']*\)'.*/\1/p")
         desc=$(echo "$line"     | sed -n "s/.*Description='\([^']*\)'.*/\1/p")
         printf '%s\t%s\t%s\t%s\t%s\n' "$scope" "$name" "$ta" "$arg_type" "$desc"

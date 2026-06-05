@@ -33,7 +33,11 @@ Use this skill to add bundled-flag entries for flags that appear in upstream Cla
 5. **Classify each new candidate.** Determine the five fields:
    - `scope` — `_root` or subcommand name
    - `name` — `--foo` (one entry per form; short forms are separate entries with the same metadata)
-   - `takes_arg` — `0` or `1`. From CHANGELOG syntax (`--foo <value>`) or from secondary `--help`
+   - `takes_arg` — `none`, `required`, or `optional`. Determine from the placeholder syntax in the CHANGELOG / secondary `--help`:
+     - `--foo <value>` → `required`
+     - `--foo [value]` → `optional` (the argument may be omitted, so completion still offers other flags after it)
+     - `--foo` (no placeholder) → `none`
+     - Beware false positives: a flag with no placeholder whose **description** merely starts with `[` (e.g. `--mcp-debug   [DEPRECATED…]`) is `none`, not `optional`. The placeholder always follows the flag after a single space; a 2+ space gap is the description column.
    - `arg_type` — `none`, `file`, `dir`, `choice:a,b,c`, or `unknown`
    - `description` — short string trimmed from the CHANGELOG entry; no embedded tabs
 
@@ -58,6 +62,6 @@ The default workflow above is **append-only**. To check for upstream removals (r
 ## Editing Conventions
 
 - Bash entries are tab-separated; descriptions cannot contain literal tabs. Use spaces for any necessary whitespace inside descriptions.
-- PowerShell entries use `[pscustomobject]@{ ... }` with the property names `Scope`, `Name`, `TakesArg`, `ArgType`, `Description`.
+- PowerShell entries use `[pscustomobject]@{ ... }` with the property names `Scope`, `Name`, `TakesArg`, `ArgType`, `Description`. `TakesArg` is a string (`'none'`/`'required'`/`'optional'`), matching the bash `takes_arg` column — not a boolean.
 - Keep entries grouped by scope; within a scope, sort alphabetically by name for predictable diffs.
 - Do **not** edit `_CLAUDE_KNOWN_MODELS` from this skill — it's a separate list maintained alongside Claude Code model releases.

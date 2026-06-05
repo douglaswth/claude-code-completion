@@ -17,6 +17,8 @@ Options:
   --model <model>                Model for session
   -p, --print                    Print response and exit
   -r, --resume [value]           Resume a conversation by session ID
+  --from-pr [value]              Resume a session linked to a PR
+  --mcp-debug                    [DEPRECATED. Use --debug instead] MCP debug
   -h, --help                     Display help
   -v, --version                  Output the version number
 
@@ -59,6 +61,41 @@ Commands:
         It 'excludes boolean flags' {
             $flagsWithArgs | Should -Not -Contain '--continue'
             $flagsWithArgs | Should -Not -Contain '--print'
+        }
+
+        It 'includes optional-arg flags (they still take an argument)' {
+            $flagsWithArgs | Should -Contain '--resume'
+            $flagsWithArgs | Should -Contain '-r'
+        }
+
+        It 'excludes a flag whose description merely starts with a bracket' {
+            # --mcp-debug takes no argument; "[DEPRECATED…]" is its description.
+            # The single-space placeholder rule must not treat it as an argument.
+            $flagsWithArgs | Should -Not -Contain '--mcp-debug'
+        }
+    }
+
+    Context '_ClaudeParseFlagsWithOptionalArgs' {
+        BeforeAll {
+            $optionalArgs = @(_ClaudeParseFlagsWithOptionalArgs -HelpLines $helpLines)
+        }
+
+        It 'includes [value] flags and their short forms' {
+            $optionalArgs | Should -Contain '--resume'
+            $optionalArgs | Should -Contain '-r'
+        }
+
+        It 'includes a long-only optional-arg flag (no short form)' {
+            $optionalArgs | Should -Contain '--from-pr'
+        }
+
+        It 'excludes required <value> flags' {
+            $optionalArgs | Should -Not -Contain '--model'
+            $optionalArgs | Should -Not -Contain '--add-dir'
+        }
+
+        It 'excludes a flag whose description merely starts with a bracket' {
+            $optionalArgs | Should -Not -Contain '--mcp-debug'
         }
     }
 
