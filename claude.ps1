@@ -41,10 +41,25 @@ $script:ClaudeExtraFlags = @(
 )
 
 function global:_ClaudeVersion {
-    $output = claude --version 2>$null
-    if ($output) {
-        ($output -split '\s')[0]
+    # `claude --version` is a slow Node cold start (~1.5s), so memoize the
+    # result per session. Key on the resolved executable's path + mtime: an
+    # upgrade (new path, or the same path rewritten) changes the key and
+    # forces a refresh, but repeated tab presses do not respawn Node.
+    $cmd = Get-Command claude -ErrorAction SilentlyContinue
+    if (-not $cmd) { return }
+    $src = $cmd.Source
+    $mtime = if ($src -and (Test-Path -LiteralPath $src)) {
+        (Get-Item -LiteralPath $src).LastWriteTimeUtc.Ticks
+    } else { 0 }
+    $key = "${src}:${mtime}"
+    if ($script:ClaudeVersionKey -eq $key -and $null -ne $script:ClaudeVersionCache) {
+        return $script:ClaudeVersionCache
     }
+    $output = claude --version 2>$null
+    $version = if ($output) { ($output -split '\s')[0] }
+    $script:ClaudeVersionCache = $version
+    $script:ClaudeVersionKey = $key
+    $version
 }
 
 function global:_ClaudeCacheBase {
@@ -84,17 +99,23 @@ function global:_ClaudeCleanupOldCache {
 
 function global:_ClaudeBuildCache {
     $cacheDir = _ClaudeCacheDir
-    New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+    # Build into a private staging dir, then publish atomically with a
+    # rename. The real version dir therefore only ever exists fully built —
+    # a crashed or interrupted build can never leave a partial/empty cache
+    # that later reads would mistake for complete.
+    $buildDir = "$cacheDir.tmp.$PID"
+    if (Test-Path $buildDir) { Remove-Item -Recurse -Force $buildDir }
+    New-Item -ItemType Directory -Path $buildDir -Force | Out-Null
 
     # Parse root level
     $helpOutput = claude --help 2>$null
     $helpLines = @($helpOutput -split "`n")
-    Set-Content -Path (Join-Path $cacheDir '_root_help') -Value $helpOutput
-    Set-Content -Path (Join-Path $cacheDir '_root_flags') -Value @(_ClaudeParseFlags -HelpLines $helpLines)
-    Set-Content -Path (Join-Path $cacheDir '_root_flags_with_args') -Value @(_ClaudeParseFlagsWithArgs -HelpLines $helpLines)
-    Set-Content -Path (Join-Path $cacheDir '_root_flag_descriptions') -Value @(_ClaudeParseFlagDescriptions -HelpLines $helpLines)
+    Set-Content -Path (Join-Path $buildDir '_root_help') -Value $helpOutput
+    Set-Content -Path (Join-Path $buildDir '_root_flags') -Value @(_ClaudeParseFlags -HelpLines $helpLines)
+    Set-Content -Path (Join-Path $buildDir '_root_flags_with_args') -Value @(_ClaudeParseFlagsWithArgs -HelpLines $helpLines)
+    Set-Content -Path (Join-Path $buildDir '_root_flag_descriptions') -Value @(_ClaudeParseFlagDescriptions -HelpLines $helpLines)
     $subcommands = @(_ClaudeParseSubcommands -HelpLines $helpLines)
-    Set-Content -Path (Join-Path $cacheDir '_root_subcommands') -Value $subcommands
+    Set-Content -Path (Join-Path $buildDir '_root_subcommands') -Value $subcommands
 
     # Parse each subcommand
     foreach ($subcmd in $subcommands) {
@@ -102,27 +123,32 @@ function global:_ClaudeBuildCache {
         $subHelp = claude $subcmd --help 2>$null
         if (-not $subHelp) { continue }
         $subHelpLines = @($subHelp -split "`n")
-        Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags") -Value @(_ClaudeParseFlags -HelpLines $subHelpLines)
-        Set-Content -Path (Join-Path $cacheDir "${subcmd}_flags_with_args") -Value @(_ClaudeParseFlagsWithArgs -HelpLines $subHelpLines)
-        Set-Content -Path (Join-Path $cacheDir "${subcmd}_flag_descriptions") -Value @(_ClaudeParseFlagDescriptions -HelpLines $subHelpLines)
-        Set-Content -Path (Join-Path $cacheDir "${subcmd}_subcommands") -Value @(_ClaudeParseSubcommands -HelpLines $subHelpLines)
+        Set-Content -Path (Join-Path $buildDir "${subcmd}_flags") -Value @(_ClaudeParseFlags -HelpLines $subHelpLines)
+        Set-Content -Path (Join-Path $buildDir "${subcmd}_flags_with_args") -Value @(_ClaudeParseFlagsWithArgs -HelpLines $subHelpLines)
+        Set-Content -Path (Join-Path $buildDir "${subcmd}_flag_descriptions") -Value @(_ClaudeParseFlagDescriptions -HelpLines $subHelpLines)
+        Set-Content -Path (Join-Path $buildDir "${subcmd}_subcommands") -Value @(_ClaudeParseSubcommands -HelpLines $subHelpLines)
     }
 
     # Merge bundled flags into the cache files (skip ones already present from --help).
     foreach ($entry in $script:ClaudeExtraFlags) {
         if (-not $entry) { continue }
-        $flagsFile = Join-Path $cacheDir "$($entry.Scope)_flags"
+        $flagsFile = Join-Path $buildDir "$($entry.Scope)_flags"
         if (-not (Test-Path $flagsFile)) { continue }
         $existing = @(Get-Content $flagsFile)
         if ($existing -contains $entry.Name) { continue }
         Add-Content -Path $flagsFile -Value $entry.Name
         if ($entry.TakesArg) {
-            Add-Content -Path (Join-Path $cacheDir "$($entry.Scope)_flags_with_args") -Value $entry.Name
+            Add-Content -Path (Join-Path $buildDir "$($entry.Scope)_flags_with_args") -Value $entry.Name
         }
-        Add-Content -Path (Join-Path $cacheDir "$($entry.Scope)_flag_descriptions") -Value "$($entry.Name)`t$($entry.Description)"
-        Add-Content -Path (Join-Path $cacheDir "$($entry.Scope)_flag_arg_types") -Value "$($entry.Name)`t$($entry.ArgType)"
+        Add-Content -Path (Join-Path $buildDir "$($entry.Scope)_flag_descriptions") -Value "$($entry.Name)`t$($entry.Description)"
+        Add-Content -Path (Join-Path $buildDir "$($entry.Scope)_flag_arg_types") -Value "$($entry.Name)`t$($entry.ArgType)"
     }
 
+    # Publish atomically: drop any stale/partial dir, then rename into place.
+    if (Test-Path $cacheDir) { Remove-Item -Recurse -Force $cacheDir }
+    Move-Item -Path $buildDir -Destination $cacheDir
+
+    # Clean up old versions (also sweeps any *.tmp.* from crashed builds).
     _ClaudeCleanupOldCache
 }
 
@@ -433,8 +459,11 @@ function global:_ClaudeComplete {
 
     $cacheDir = _ClaudeCacheDir
 
-    # Build cache if needed
-    if (-not (Test-Path $cacheDir)) {
+    # Build cache if needed. Gate on a populated cache (the _root_help
+    # sentinel), not bare directory existence: an interrupted build or a
+    # leftover empty dir must trigger a rebuild rather than serve an empty
+    # cache. Atomic publish guarantees _root_help only appears fully built.
+    if (-not (Test-Path (Join-Path $cacheDir '_root_help'))) {
         _ClaudeBuildCache
     }
 

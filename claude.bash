@@ -60,8 +60,31 @@ _claude_parse_extra_flag_record() {
     IFS=$'\t' read -r _scope _name _takes_arg _arg_type _desc <<< "$record"
 }
 
+# Modification time of a file as a Unix timestamp, portable across the
+# FreeBSD/macOS (`stat -f %m`) and GNU/Linux (`stat -c %Y`) stat variants.
+_claude_mtime() {
+    local file="$1" m
+    m="$(stat -f %m "$file" 2>/dev/null)"
+    [[ "$m" =~ ^[0-9]+$ ]] && { echo "$m"; return; }
+    m="$(stat -c %Y "$file" 2>/dev/null)"
+    [[ "$m" =~ ^[0-9]+$ ]] && echo "$m"
+}
+
+# Resolve the claude CLI version. `claude --version` is a slow Node
+# cold-start (~1.5s), so memoize the result per shell, keyed on the
+# binary's path + mtime — an upgrade (new path or rewritten binary)
+# invalidates the cache, but repeated tab presses do not respawn Node.
 _claude_version() {
-    claude --version 2>/dev/null | head -1 | awk '{print $1}'
+    local claude_path key
+    claude_path="$(command -v claude 2>/dev/null)"
+    key="${claude_path}:$(_claude_mtime "$claude_path")"
+    if [[ -n "${_CLAUDE_VERSION_CACHE:-}" && "${_CLAUDE_VERSION_KEY:-}" == "$key" ]]; then
+        printf '%s\n' "$_CLAUDE_VERSION_CACHE"
+        return
+    fi
+    _CLAUDE_VERSION_CACHE="$(claude --version 2>/dev/null | head -1 | awk '{print $1}')"
+    _CLAUDE_VERSION_KEY="$key"
+    printf '%s\n' "$_CLAUDE_VERSION_CACHE"
 }
 
 _claude_cache_dir() {
@@ -172,18 +195,24 @@ _claude_parse_subcommands() {
 }
 
 _claude_build_cache() {
-    local cache_dir
+    local cache_dir build_dir
     cache_dir="$(_claude_cache_dir)"
-    mkdir -p "$cache_dir"
+    # Build into a private staging dir, then publish atomically with a
+    # rename. The real version dir therefore only ever exists fully built —
+    # a crashed or interrupted build can never leave a partial/empty cache
+    # that later reads would mistake for complete.
+    build_dir="${cache_dir}.tmp.$$"
+    rm -rf "$build_dir"
+    mkdir -p "$build_dir"
 
     # Parse root level
     local help_output
     help_output="$(claude --help 2>/dev/null)"
-    echo "$help_output" > "$cache_dir/_root_help"
-    echo "$help_output" | _claude_parse_flags > "$cache_dir/_root_flags"
-    echo "$help_output" | _claude_parse_flags_with_args > "$cache_dir/_root_flags_with_args"
-    echo "$help_output" | _claude_parse_flag_descriptions > "$cache_dir/_root_flag_descriptions"
-    echo "$help_output" | _claude_parse_subcommands > "$cache_dir/_root_subcommands"
+    echo "$help_output" > "$build_dir/_root_help"
+    echo "$help_output" | _claude_parse_flags > "$build_dir/_root_flags"
+    echo "$help_output" | _claude_parse_flags_with_args > "$build_dir/_root_flags_with_args"
+    echo "$help_output" | _claude_parse_flag_descriptions > "$build_dir/_root_flag_descriptions"
+    echo "$help_output" | _claude_parse_subcommands > "$build_dir/_root_subcommands"
 
     # Parse each subcommand
     local subcmd
@@ -191,31 +220,35 @@ _claude_build_cache() {
         [[ -z "$subcmd" ]] && continue
         local sub_help
         sub_help="$(claude "$subcmd" --help 2>/dev/null)" || continue
-        echo "$sub_help" | _claude_parse_flags > "$cache_dir/${subcmd}_flags"
-        echo "$sub_help" | _claude_parse_flags_with_args > "$cache_dir/${subcmd}_flags_with_args"
-        echo "$sub_help" | _claude_parse_flag_descriptions > "$cache_dir/${subcmd}_flag_descriptions"
-        echo "$sub_help" | _claude_parse_subcommands > "$cache_dir/${subcmd}_subcommands"
-    done < "$cache_dir/_root_subcommands"
+        echo "$sub_help" | _claude_parse_flags > "$build_dir/${subcmd}_flags"
+        echo "$sub_help" | _claude_parse_flags_with_args > "$build_dir/${subcmd}_flags_with_args"
+        echo "$sub_help" | _claude_parse_flag_descriptions > "$build_dir/${subcmd}_flag_descriptions"
+        echo "$sub_help" | _claude_parse_subcommands > "$build_dir/${subcmd}_subcommands"
+    done < "$build_dir/_root_subcommands"
 
     # Merge bundled flags into the cache files (skip ones already present from --help).
     local rec scope name takes_arg arg_type desc flags_file
     for rec in "${_CLAUDE_EXTRA_FLAGS[@]}"; do
         [[ -z "$rec" ]] && continue
         _claude_parse_extra_flag_record "$rec" scope name takes_arg arg_type desc
-        flags_file="$cache_dir/${scope}_flags"
+        flags_file="$build_dir/${scope}_flags"
         [[ -f "$flags_file" ]] || continue
         if grep -qFx -- "$name" "$flags_file"; then
             continue  # --help wins on overlap
         fi
         echo "$name" >> "$flags_file"
         if [[ "$takes_arg" == "1" ]]; then
-            echo "$name" >> "$cache_dir/${scope}_flags_with_args"
+            echo "$name" >> "$build_dir/${scope}_flags_with_args"
         fi
-        printf '%s\t%s\n' "$name" "$desc" >> "$cache_dir/${scope}_flag_descriptions"
-        printf '%s\t%s\n' "$name" "$arg_type" >> "$cache_dir/${scope}_flag_arg_types"
+        printf '%s\t%s\n' "$name" "$desc" >> "$build_dir/${scope}_flag_descriptions"
+        printf '%s\t%s\n' "$name" "$arg_type" >> "$build_dir/${scope}_flag_arg_types"
     done
 
-    # Clean up old versions
+    # Publish atomically: drop any stale/partial dir, then rename into place.
+    rm -rf "$cache_dir"
+    mv "$build_dir" "$cache_dir"
+
+    # Clean up old versions (also sweeps any *.tmp.* from crashed builds)
     _claude_cleanup_old_cache
 }
 
@@ -519,8 +552,10 @@ _claude() {
     local cache_dir
     cache_dir="$(_claude_cache_dir)"
 
-    # Build cache if needed
-    if [[ ! -d "$cache_dir" ]]; then
+    # Build cache if needed. Gate on a populated cache (the _root_help
+    # sentinel), not bare directory existence — an empty or partially
+    # written dir must trigger a rebuild rather than serving nothing.
+    if [[ ! -f "$cache_dir/_root_help" ]]; then
         _claude_build_cache
     fi
 

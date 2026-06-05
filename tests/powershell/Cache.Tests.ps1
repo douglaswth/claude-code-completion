@@ -234,3 +234,52 @@ Commands:
         }
     }
 }
+
+Describe 'Cache readiness gating' {
+    BeforeEach {
+        $script:TestCacheDir = Join-Path $TestDrive "ready-$([guid]::NewGuid())"
+        $env:XDG_CACHE_HOME = $script:TestCacheDir
+    }
+
+    AfterEach {
+        $env:XDG_CACHE_HOME = $null
+    }
+
+    It 'rebuilds when the cache dir exists but is empty' {
+        # A leftover empty version dir (e.g. created by an older script that
+        # made the dir but never populated it) must not be mistaken for a
+        # built cache.
+        $dir = _ClaudeCacheDir
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        Get-CompletionText 'claude --mod' | Should -Contain '--model'
+    }
+
+    It 'rebuilds when the cache dir is incomplete' {
+        # A dir with some unrelated file but missing the cache contents must
+        # still trigger a rebuild rather than serving an empty cache.
+        $dir = _ClaudeCacheDir
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        Set-Content -Path (Join-Path $dir 'some_other_file') -Value 'stale'
+        Get-CompletionText 'claude --mod' | Should -Contain '--model'
+    }
+}
+
+Describe 'Atomic cache publish' {
+    BeforeEach {
+        $script:TestCacheDir = Join-Path $TestDrive "atomic-$([guid]::NewGuid())"
+        $env:XDG_CACHE_HOME = $script:TestCacheDir
+    }
+
+    AfterEach {
+        $env:XDG_CACHE_HOME = $null
+    }
+
+    It 'leaves no temp staging dir behind' {
+        # The real version dir must only appear fully built; the private
+        # staging dir used during the build must not survive.
+        _ClaudeBuildCache
+        $baseDir = Join-Path (Join-Path $script:TestCacheDir 'claude-code-completion') 'powershell'
+        @(Get-ChildItem -Path $baseDir -Directory | Where-Object { $_.Name -like '*.tmp.*' }) |
+            Should -BeNullOrEmpty
+    }
+}

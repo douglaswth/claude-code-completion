@@ -141,3 +141,39 @@ function test_cleanup_old_cache_removes_pre_schema_directories() {
     _claude_cleanup_old_cache
     assert_directory_not_exists "$base_dir/1.0.0"
 }
+
+# --- Readiness gating: an existing-but-incomplete cache must be rebuilt ---
+
+function test_completion_rebuilds_when_cache_dir_empty() {
+    # A leftover empty version dir (e.g. created by an older script that
+    # mkdir'd but never populated) must not be mistaken for a built cache.
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    mkdir -p "$cache_dir"
+    local result
+    result="$(simulate_completion "claude --mod")"
+    assert_contains "--model" "$result"
+}
+
+function test_completion_rebuilds_when_cache_dir_incomplete() {
+    # A dir with some unrelated file but missing the cache contents must
+    # still trigger a rebuild rather than serving an empty cache.
+    local cache_dir
+    cache_dir="$(_claude_cache_dir)"
+    mkdir -p "$cache_dir"
+    echo stale > "$cache_dir/some_other_file"
+    local result
+    result="$(simulate_completion "claude --mod")"
+    assert_contains "--model" "$result"
+}
+
+# --- Atomic publish: the real version dir only appears fully built ---
+
+function test_build_cache_leaves_no_temp_staging_dir() {
+    _claude_build_cache
+    local base_dir="$XDG_CACHE_HOME/claude-code-completion/bash"
+    shopt -s nullglob
+    local leftovers=("$base_dir"/*.tmp.*)
+    shopt -u nullglob
+    assert_same "0" "${#leftovers[@]}"
+}
