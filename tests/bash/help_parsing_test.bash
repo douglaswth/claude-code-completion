@@ -27,6 +27,11 @@ Options:
 
 Commands:
   auth                           Manage authentication
+  doctor                         Check the health of your Claude Code
+                                 auto-updater. The workspace trust dialog is
+                                 skipped for health checks.
+                                 Only use this command in directories you
+                                 trust.
   mcp                            Configure MCP servers
   plugin                         Manage plugins
 HELP
@@ -52,8 +57,14 @@ Options:
   -h, --help                                     Display help
 
 Commands:
-  add [options] <name> <commandOrUrl> [args...]  Add an MCP server
-  get <name>                                     Get MCP server details
+  add [options] <name> <commandOrUrl> [args...]  Add an MCP server to Claude.
+
+  Examples:
+    # Add HTTP server:
+    claude mcp add --transport http sentry https://mcp.sentry.dev/mcp
+  get <name>                                     Get MCP server details. Some
+                                                 servers are health-checked
+                                                 only when approved.
   list                                           List MCP servers
   remove [options] <name>                        Remove an MCP server
 HELP
@@ -157,10 +168,33 @@ function test_optional_args_excludes_bracket_description_flag() {
     assert_file_not_contains "$CACHE_DIR/_root_flags_with_optional_args" "--mcp-debug"
 }
 
+function test_root_subcommands_contains_doctor() {
+    # A command with a wrapped, multi-line description is still a real command.
+    assert_file_contains "$CACHE_DIR/_root_subcommands" "doctor"
+}
+
+function test_root_subcommands_excludes_wrapped_description_word() {
+    # The deeply-indented continuation lines of doctor's description must not be
+    # mistaken for subcommands (e.g. "Only use this command…").
+    assert_file_not_contains "$CACHE_DIR/_root_subcommands" "Only"
+}
+
 function test_mcp_subcommands_file_exists() {
     assert_file_exists "$CACHE_DIR/mcp_subcommands"
 }
 
 function test_mcp_subcommands_contains_add() {
     assert_file_contains "$CACHE_DIR/mcp_subcommands" "add"
+}
+
+function test_mcp_subcommands_excludes_examples_label() {
+    # An "Examples:" sub-heading embedded in a command description has no
+    # description column and must not be parsed as a subcommand.
+    assert_file_not_contains "$CACHE_DIR/mcp_subcommands" "Examples"
+}
+
+function test_mcp_subcommands_excludes_example_command_lines() {
+    # Sample invocations inside an Examples block ("claude mcp add …") are
+    # indented past the term column and must not be parsed as subcommands.
+    assert_file_not_contains "$CACHE_DIR/mcp_subcommands" "claude"
 }

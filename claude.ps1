@@ -212,7 +212,13 @@ function global:_ClaudeParseSubcommands {
         if ($inCommands) {
             if ([string]::IsNullOrEmpty($line)) { continue }
             if ($line -notmatch '^\s') { break }
-            if ($line -match '^\s+([a-zA-Z][-a-zA-Z]*)') {
+            # A real command entry sits at the 2-space term column and is a
+            # two-column "name  <gap>  description" row. Anchoring on exactly
+            # two leading spaces rejects wrapped description lines (indented to
+            # the deep help column) and example/code lines (indented 4+);
+            # requiring a 2+ space gap before the description rejects bare
+            # sub-headings like "Examples:" that have no description column.
+            if ($line -match '^  ([a-zA-Z][-a-zA-Z]*).*  +\S') {
                 $Matches[1]
             }
         }

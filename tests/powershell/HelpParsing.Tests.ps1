@@ -24,6 +24,16 @@ Options:
 
 Commands:
   auth                           Manage authentication
+  doctor                         Check the health of your Claude Code
+                                 auto-updater. The workspace trust dialog is
+                                 skipped for health checks.
+                                 Only use this command in directories you
+                                 trust.
+  add [options] <name> <url>     Add an MCP server to Claude.
+
+  Examples:
+    # Add HTTP server:
+    claude mcp add --transport http sentry https://mcp.sentry.dev/mcp
   mcp                            Configure MCP servers
   plugin                         Manage plugins
 '@
@@ -140,9 +150,31 @@ Commands:
             $subcommands | Should -Contain 'plugin'
         }
 
+        It 'extracts a command with a wrapped, multi-line description' {
+            $subcommands | Should -Contain 'doctor'
+            $subcommands | Should -Contain 'add'
+        }
+
         It 'does not include non-command text' {
             $subcommands | Should -Not -Contain 'prompt'
             $subcommands | Should -Not -Contain 'Options:'
+        }
+
+        It 'does not mistake wrapped description lines for subcommands' {
+            # Continuation lines are indented to the deep help column, e.g.
+            # "Only use this command in directories you trust."
+            $subcommands | Should -Not -Contain 'Only'
+        }
+
+        It 'does not mistake an Examples sub-heading for a subcommand' {
+            # "Examples:" has no description column, so it is not a command.
+            $subcommands | Should -Not -Contain 'Examples'
+        }
+
+        It 'does not mistake example command lines for subcommands' {
+            # Sample invocations ("claude mcp add …") are indented past the
+            # term column.
+            $subcommands | Should -Not -Contain 'claude'
         }
     }
 }

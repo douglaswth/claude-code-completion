@@ -67,6 +67,10 @@ Wait for the user's input on each area before moving to the next.
 
 When making changes that affect usage, testing, or installation instructions, update both `CLAUDE.md` and `README.md` to keep them in sync.
 
+## Pull Requests
+
+After opening or pushing to a PR, **watch CI to completion** — don't report a PR as done while checks are still running. Poll the run (e.g. `gh pr checks <branch> --watch`, or `gh run watch`) until every check finishes, then report the result. If a check fails, investigate the logs before declaring success. This applies whenever you propose committing/pushing/PR-ing: the offer implicitly includes seeing CI go green.
+
 ## Releases
 
 Releases are cut by creating a GitHub release with a SemVer tag (e.g., `gh release create 1.0.1 --generate-notes`); GitHub creates the tag at the target commit if it doesn't exist. The `.github/workflows/release.yml` workflow then auto-attaches `claude.bash` and `claude.ps1` to the release.
