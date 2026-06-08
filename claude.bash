@@ -16,9 +16,9 @@ fi
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-_CLAUDE_CACHE_VERSION=4
+_CLAUDE_CACHE_VERSION=5
 
-# Bundled flags last extended through CHANGELOG version: 2.1.165
+# Bundled flags last extended through CHANGELOG version: 2.1.168
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Format: scope<TAB>name<TAB>takes_arg<TAB>arg_type<TAB>description
@@ -50,6 +50,7 @@ _CLAUDE_EXTRA_FLAGS=(
     $'_root\t--rewind-files\trequired\tunknown\tRewind files to a given message ID (requires --resume)'
     $'_root\t--session-mirror\tnone\tnone\tMirror local sessions to claude.ai as view-only'
     $'_root\t--spawn\trequired\tchoice:same-dir,worktree,session\tSpawn mode for --remote-control sessions'
+    $'_root\t--thinking\trequired\tchoice:enabled,adaptive,disabled\tThinking mode: enabled (adaptive) or disabled'
     $'_root\t--thinking-display\trequired\tunknown\tControl how thinking content is displayed'
 )
 

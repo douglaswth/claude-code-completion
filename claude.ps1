@@ -4,9 +4,9 @@
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-$script:ClaudeCacheVersion = 4
+$script:ClaudeCacheVersion = 5
 
-# Bundled flags last extended through CHANGELOG version: 2.1.165
+# Bundled flags last extended through CHANGELOG version: 2.1.168
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Each entry has fields: Scope, Name, TakesArg, ArgType, Description
@@ -38,6 +38,7 @@ $script:ClaudeExtraFlags = @(
     [pscustomobject]@{ Scope='_root'; Name='--rewind-files'; TakesArg='required'; ArgType='unknown'; Description='Rewind files to a given message ID (requires --resume)' }
     [pscustomobject]@{ Scope='_root'; Name='--session-mirror'; TakesArg='none'; ArgType='none'; Description='Mirror local sessions to claude.ai as view-only' }
     [pscustomobject]@{ Scope='_root'; Name='--spawn'; TakesArg='required'; ArgType='choice:same-dir,worktree,session'; Description='Spawn mode for --remote-control sessions' }
+    [pscustomobject]@{ Scope='_root'; Name='--thinking'; TakesArg='required'; ArgType='choice:enabled,adaptive,disabled'; Description='Thinking mode: enabled (adaptive) or disabled' }
     [pscustomobject]@{ Scope='_root'; Name='--thinking-display'; TakesArg='required'; ArgType='unknown'; Description='Control how thinking content is displayed' }
 )
 
