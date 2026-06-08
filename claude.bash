@@ -212,8 +212,15 @@ _claude_parse_subcommands() {
             # Empty line or non-indented line ends commands section
             [[ -z "$line" ]] && continue
             [[ ! "$line" =~ ^[[:space:]] ]] && break
+            # A real command entry sits at the 2-space term column and is a
+            # two-column "name  <gap>  description" row. Anchoring on exactly
+            # two leading spaces rejects wrapped description lines (indented to
+            # the deep help column) and example/code lines (indented 4+);
+            # requiring a 2+ space gap before the description rejects bare
+            # sub-headings like "Examples:" that have no description column.
             # Extract command name (first word, handle "update|upgrade" aliases)
-            if [[ "$line" =~ ^[[:space:]]+([a-zA-Z][-a-zA-Z]*) ]]; then
+            local cmd_re='^  ([a-zA-Z][-a-zA-Z]*).*  +[^[:space:]]'
+            if [[ "$line" =~ $cmd_re ]]; then
                 echo "${BASH_REMATCH[1]}"
             fi
         fi
