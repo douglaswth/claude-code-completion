@@ -6,7 +6,7 @@
 # same CLI version.
 $script:ClaudeCacheVersion = 5
 
-# Bundled flags last extended through CHANGELOG version: 2.1.168
+# Bundled flags last extended through CHANGELOG version: 2.1.170
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Each entry has fields: Scope, Name, TakesArg, ArgType, Description
@@ -241,6 +241,7 @@ function global:_ClaudeParseFlagDescriptions {
 
 $script:_ClaudeKnownModels = @(
     'sonnet', 'opus', 'haiku',
+    'claude-fable-5',
     'claude-sonnet-4-5-20250929',
     'claude-sonnet-4-6',
     'claude-opus-4-5-20251101',

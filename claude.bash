@@ -18,7 +18,7 @@ fi
 # same CLI version.
 _CLAUDE_CACHE_VERSION=5
 
-# Bundled flags last extended through CHANGELOG version: 2.1.168
+# Bundled flags last extended through CHANGELOG version: 2.1.170
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Format: scope<TAB>name<TAB>takes_arg<TAB>arg_type<TAB>description
@@ -424,6 +424,7 @@ _claude_complete_sessions() {
 # Hardcoded model IDs (update when new models are released)
 _CLAUDE_KNOWN_MODELS=(
     sonnet opus haiku
+    claude-fable-5
     claude-sonnet-4-5-20250929
     claude-sonnet-4-6
     claude-opus-4-5-20251101
