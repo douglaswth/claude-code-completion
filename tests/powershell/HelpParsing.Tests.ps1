@@ -36,6 +36,7 @@ Commands:
     claude mcp add --transport http sentry https://mcp.sentry.dev/mcp
   mcp                            Configure MCP servers
   plugin                         Manage plugins
+  update|upgrade [options]       Update Claude Code
 '@
         $helpLines = $helpText -split "`n"
     }
@@ -175,6 +176,43 @@ Commands:
             # Sample invocations ("claude mcp add …") are indented past the
             # term column.
             $subcommands | Should -Not -Contain 'claude'
+        }
+    }
+
+    Context '_ClaudeParseSubcommandDescriptions' {
+        BeforeAll {
+            $subDescriptions = @(_ClaudeParseSubcommandDescriptions -HelpLines $helpLines)
+        }
+
+        It 'extracts a plain subcommand description' {
+            $subDescriptions | Should -Contain "auth`tManage authentication"
+        }
+
+        It 'keeps only the first line of a wrapped description' {
+            $subDescriptions | Should -Contain "doctor`tCheck the health of your Claude Code"
+            ($subDescriptions | Where-Object { $_ -like '*auto-updater*' }) | Should -BeNullOrEmpty
+        }
+
+        It 'skips argument placeholders before the description' {
+            $subDescriptions | Should -Contain "add`tAdd an MCP server to Claude."
+        }
+
+        It 'maps an aliased command description to the first alias name' {
+            # "update|upgrade [options]  Update Claude Code" — matches what
+            # the name parser extracts.
+            $subDescriptions | Should -Contain "update`tUpdate Claude Code"
+        }
+
+        It 'does not emit entries for example or sub-heading lines' {
+            ($subDescriptions | Where-Object { $_ -like 'Examples*' }) | Should -BeNullOrEmpty
+            ($subDescriptions | Where-Object { $_ -like 'claude*' }) | Should -BeNullOrEmpty
+        }
+
+        It 'strips trailing CR from descriptions when help has CRLF line endings' {
+            $crlfHelp = "Commands:`n  crlf-cmd                    Description with CRLF`r`n"
+            $crlfLines = $crlfHelp -split "`n"
+            $crlfDescriptions = @(_ClaudeParseSubcommandDescriptions -HelpLines $crlfLines)
+            $crlfDescriptions | Should -Contain "crlf-cmd`tDescription with CRLF"
         }
     }
 }

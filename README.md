@@ -13,6 +13,7 @@ Both shells share the same core capabilities:
 - **Session resume** — `--resume` completes session IDs with message previews from your current project
 - **MCP server names** — `claude mcp get/remove` completes server names from `claude mcp list`
 - **Plugin names** — `claude plugin enable/disable/uninstall` completes installed plugin names
+- **Flag and subcommand descriptions** — completions carry the help text for each flag and subcommand: bash renders aligned `# description` columns (Cobra/kubectl style), PowerShell shows tooltips
 
 ### Bash
 
@@ -79,8 +80,8 @@ After installation, press `Tab` to complete:
 ### Bash
 
 ```
-claude <TAB>           # subcommands (auth, mcp, plugin, ...)
-claude -<TAB>          # flags (--model, --resume, --print, ...)
+claude <TAB>           # subcommands (auth, mcp, plugin, ...) with descriptions
+claude -<TAB>          # flags (--model, --resume, --print, ...) with descriptions
 claude --model <TAB>   # model names (sonnet, opus, haiku, ...)
 claude --resume <TAB>  # session IDs with message previews
 claude mcp <TAB>       # mcp subcommands (add, get, list, remove)

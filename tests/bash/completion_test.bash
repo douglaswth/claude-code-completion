@@ -17,6 +17,7 @@ Options:
   --model <model>                Model for session
   -p, --print                    Print response and exit
   -r, --resume [value]           Resume a conversation
+  --bare-flag
   -h, --help                     Display help
   -v, --version                  Output the version number
 
@@ -117,6 +118,37 @@ function test_mcp_subcommand_shows_mcp_subcommands() {
     result="$(simulate_completion "claude mcp ")"
     assert_contains "add" "$result"
     assert_contains "list" "$result"
+}
+
+function test_subcommand_completion_renders_descriptions_when_multiple_match() {
+    # When multiple subcommands match, descriptions render via the same
+    # Cobra/kubectl `name    # description` formatter used for flags.
+    local result
+    result="$(simulate_completion "claude ")"
+    assert_contains "Manage authentication" "$result"
+}
+
+function test_sub_subcommand_completion_renders_descriptions() {
+    local result
+    result="$(simulate_completion "claude mcp ")"
+    assert_contains "Add server" "$result"
+}
+
+function test_flag_without_description_falls_back_to_bare_name() {
+    # --bare-flag has no description column in the mock help: the flag parser
+    # extracts it but the description parser skips it, so the candidate falls
+    # back to the bare name with nothing appended.
+    local result
+    result="$(simulate_completion "claude --bare")"
+    assert_same "--bare-flag" "$result"
+}
+
+function test_single_subcommand_match_inserts_without_description() {
+    # A single match must insert cleanly — no description appended.
+    local result
+    result="$(simulate_completion "claude au")"
+    assert_contains "auth" "$result"
+    assert_not_contains "Manage authentication" "$result"
 }
 
 function test_flag_completion_renders_descriptions_when_multiple_match() {

@@ -13,6 +13,7 @@ Options:
   --model <model>                Model for session
   -p, --print                    Print response and exit
   -r, --resume [value]           Resume a conversation
+  --bare-flag
   -h, --help                     Display help
   -v, --version                  Output the version number
 
@@ -104,6 +105,15 @@ Describe 'Flag tooltip descriptions' {
         $versionResult = $results | Where-Object { $_.CompletionText -eq '--version' }
         $versionResult | Should -Not -BeNullOrEmpty
     }
+
+    It 'uses the flag name as tooltip when help gives no description' {
+        # --bare-flag has no description column in the mock help, so the
+        # flag parser extracts it but the description parser skips it.
+        $results = Invoke-ClaudeCompleter 'claude --'
+        $bareResult = $results | Where-Object { $_.CompletionText -eq '--bare-flag' }
+        $bareResult | Should -Not -BeNullOrEmpty
+        $bareResult.ToolTip | Should -Be '--bare-flag'
+    }
 }
 
 Describe 'Subcommand completion' {
@@ -117,5 +127,21 @@ Describe 'Subcommand completion' {
         $results = Get-CompletionText 'claude mcp '
         $results | Should -Contain 'add'
         $results | Should -Contain 'list'
+    }
+}
+
+Describe 'Subcommand tooltip descriptions' {
+    It 'subcommand completions have descriptive tooltips' {
+        $results = Invoke-ClaudeCompleter 'claude '
+        $authResult = $results | Where-Object { $_.CompletionText -eq 'auth' }
+        $authResult | Should -Not -BeNullOrEmpty
+        $authResult.ToolTip | Should -Be 'Manage authentication'
+    }
+
+    It 'sub-subcommand completions have descriptive tooltips' {
+        $results = Invoke-ClaudeCompleter 'claude mcp '
+        $addResult = $results | Where-Object { $_.CompletionText -eq 'add' }
+        $addResult | Should -Not -BeNullOrEmpty
+        $addResult.ToolTip | Should -Be 'Add server'
     }
 }
