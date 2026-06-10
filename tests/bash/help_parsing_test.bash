@@ -198,3 +198,36 @@ function test_mcp_subcommands_excludes_example_command_lines() {
     # indented past the term column and must not be parsed as subcommands.
     assert_file_not_contains "$CACHE_DIR/mcp_subcommands" "claude"
 }
+
+function test_root_subcommand_descriptions_file_exists() {
+    assert_file_exists "$CACHE_DIR/_root_subcommand_descriptions"
+}
+
+function test_root_subcommand_descriptions_contains_auth() {
+    assert_file_contains "$CACHE_DIR/_root_subcommand_descriptions" $'auth\tManage authentication'
+}
+
+function test_subcommand_description_keeps_first_line_of_wrapped_text() {
+    # doctor's description wraps over several lines; only the first line is
+    # captured (continuation lines live at the deep help column).
+    assert_file_contains "$CACHE_DIR/_root_subcommand_descriptions" $'doctor\tCheck the health of your Claude Code'
+    assert_file_not_contains "$CACHE_DIR/_root_subcommand_descriptions" "auto-updater"
+}
+
+function test_mcp_subcommand_descriptions_skip_arg_placeholders() {
+    # "add [options] <name> <commandOrUrl> [args...]  Add an MCP server to
+    # Claude." — the description starts after the placeholder block.
+    assert_file_contains "$CACHE_DIR/mcp_subcommand_descriptions" $'add\tAdd an MCP server to Claude.'
+    assert_file_not_contains "$CACHE_DIR/mcp_subcommand_descriptions" "options"
+}
+
+function test_mcp_subcommand_descriptions_exclude_examples_block() {
+    assert_file_not_contains "$CACHE_DIR/mcp_subcommand_descriptions" "Examples"
+    assert_file_not_contains "$CACHE_DIR/mcp_subcommand_descriptions" "sentry"
+}
+
+function test_plugin_subcommand_descriptions_map_first_alias_name() {
+    # "install|i [options] <plugin>  Install a plugin" — the description maps
+    # to the first alias name, matching what the name parser extracts.
+    assert_file_contains "$CACHE_DIR/plugin_subcommand_descriptions" $'install\tInstall a plugin'
+}

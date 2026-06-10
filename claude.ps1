@@ -4,7 +4,7 @@
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-$script:ClaudeCacheVersion = 5
+$script:ClaudeCacheVersion = 6
 
 # Bundled flags last extended through CHANGELOG version: 2.1.170
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
@@ -119,6 +119,7 @@ function global:_ClaudeBuildCache {
     Set-Content -Path (Join-Path $buildDir '_root_flag_descriptions') -Value @(_ClaudeParseFlagDescriptions -HelpLines $helpLines)
     $subcommands = @(_ClaudeParseSubcommands -HelpLines $helpLines)
     Set-Content -Path (Join-Path $buildDir '_root_subcommands') -Value $subcommands
+    Set-Content -Path (Join-Path $buildDir '_root_subcommand_descriptions') -Value @(_ClaudeParseSubcommandDescriptions -HelpLines $helpLines)
 
     # Parse each subcommand
     foreach ($subcmd in $subcommands) {
@@ -131,6 +132,7 @@ function global:_ClaudeBuildCache {
         Set-Content -Path (Join-Path $buildDir "${subcmd}_flags_with_optional_args") -Value @(_ClaudeParseFlagsWithOptionalArgs -HelpLines $subHelpLines)
         Set-Content -Path (Join-Path $buildDir "${subcmd}_flag_descriptions") -Value @(_ClaudeParseFlagDescriptions -HelpLines $subHelpLines)
         Set-Content -Path (Join-Path $buildDir "${subcmd}_subcommands") -Value @(_ClaudeParseSubcommands -HelpLines $subHelpLines)
+        Set-Content -Path (Join-Path $buildDir "${subcmd}_subcommand_descriptions") -Value @(_ClaudeParseSubcommandDescriptions -HelpLines $subHelpLines)
     }
 
     # Merge bundled flags into the cache files (skip ones already present from --help).
@@ -223,6 +225,52 @@ function global:_ClaudeParseSubcommands {
                 $Matches[1]
             }
         }
+    }
+}
+
+function global:_ClaudeParseSubcommandDescriptions {
+    param([string[]]$HelpLines)
+    $inCommands = $false
+    foreach ($line in $HelpLines) {
+        if ($line -match '^Commands:') {
+            $inCommands = $true
+            continue
+        }
+        if ($inCommands) {
+            if ([string]::IsNullOrEmpty($line)) { continue }
+            if ($line -notmatch '^\s') { break }
+            # Same row anchoring as _ClaudeParseSubcommands; the description
+            # is the text after the first 2+ space gap (lazy .*?), which
+            # skips alias forms ("update|upgrade") and argument placeholders
+            # ("[options] <name>"). Wrapped descriptions keep only their
+            # first line, matching _ClaudeParseFlagDescriptions.
+            if ($line -match '^  ([a-zA-Z][-a-zA-Z]*).*?\s{2,}(\S.+)') {
+                "$($Matches[1])`t$($Matches[2].TrimEnd())"
+            }
+        }
+    }
+}
+
+function global:_ClaudeCompletionsWithTooltips {
+    # Emit CompletionResults for the values in $ListFile that match
+    # $WordToComplete, with tooltips looked up in $DescFile (falling back to
+    # the value itself when no description is known).
+    param(
+        [string]$ListFile,
+        [string]$DescFile,
+        [string]$WordToComplete,
+        [string]$ResultType
+    )
+    $descriptions = @{}
+    if (Test-Path $DescFile) {
+        Get-Content $DescFile | ForEach-Object {
+            $parts = $_ -split "`t", 2
+            if ($parts.Count -eq 2) { $descriptions[$parts[0]] = $parts[1] }
+        }
+    }
+    Get-Content $ListFile | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+        $tooltip = if ($descriptions.ContainsKey($_)) { $descriptions[$_] } else { $_ }
+        [System.Management.Automation.CompletionResult]::new($_, $_, $ResultType, $tooltip)
     }
 }
 
@@ -568,18 +616,9 @@ function global:_ClaudeComplete {
             # Complete subcommand flags
             $flagsFile = Join-Path $cacheDir "${subcmd}_flags"
             if (Test-Path $flagsFile) {
-                $descFile = Join-Path $cacheDir "${subcmd}_flag_descriptions"
-                $descriptions = @{}
-                if (Test-Path $descFile) {
-                    Get-Content $descFile | ForEach-Object {
-                        $parts = $_ -split "`t", 2
-                        if ($parts.Count -eq 2) { $descriptions[$parts[0]] = $parts[1] }
-                    }
-                }
-                Get-Content $flagsFile | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
-                    $tooltip = if ($descriptions.ContainsKey($_)) { $descriptions[$_] } else { $_ }
-                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterName', $tooltip)
-                }
+                _ClaudeCompletionsWithTooltips -ListFile $flagsFile `
+                    -DescFile (Join-Path $cacheDir "${subcmd}_flag_descriptions") `
+                    -WordToComplete $WordToComplete -ResultType 'ParameterName'
             }
         } elseif ($subSubcmd) {
             # Complete positional args for sub-subcommands
@@ -588,9 +627,9 @@ function global:_ClaudeComplete {
             # Complete sub-subcommands
             $subFile = Join-Path $cacheDir "${subcmd}_subcommands"
             if (Test-Path $subFile) {
-                Get-Content $subFile | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
-                    [System.Management.Automation.CompletionResult]::new($_, $_, 'Command', $_)
-                }
+                _ClaudeCompletionsWithTooltips -ListFile $subFile `
+                    -DescFile (Join-Path $cacheDir "${subcmd}_subcommand_descriptions") `
+                    -WordToComplete $WordToComplete -ResultType 'Command'
             }
         }
     } else {
@@ -599,26 +638,17 @@ function global:_ClaudeComplete {
             # Complete flags
             $flagsFile = Join-Path $cacheDir '_root_flags'
             if (Test-Path $flagsFile) {
-                $descFile = Join-Path $cacheDir '_root_flag_descriptions'
-                $descriptions = @{}
-                if (Test-Path $descFile) {
-                    Get-Content $descFile | ForEach-Object {
-                        $parts = $_ -split "`t", 2
-                        if ($parts.Count -eq 2) { $descriptions[$parts[0]] = $parts[1] }
-                    }
-                }
-                Get-Content $flagsFile | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
-                    $tooltip = if ($descriptions.ContainsKey($_)) { $descriptions[$_] } else { $_ }
-                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterName', $tooltip)
-                }
+                _ClaudeCompletionsWithTooltips -ListFile $flagsFile `
+                    -DescFile (Join-Path $cacheDir '_root_flag_descriptions') `
+                    -WordToComplete $WordToComplete -ResultType 'ParameterName'
             }
         } else {
             # Complete subcommands
             $subFile = Join-Path $cacheDir '_root_subcommands'
             if (Test-Path $subFile) {
-                Get-Content $subFile | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
-                    [System.Management.Automation.CompletionResult]::new($_, $_, 'Command', $_)
-                }
+                _ClaudeCompletionsWithTooltips -ListFile $subFile `
+                    -DescFile (Join-Path $cacheDir '_root_subcommand_descriptions') `
+                    -WordToComplete $WordToComplete -ResultType 'Command'
             }
         }
     }

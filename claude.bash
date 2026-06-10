@@ -16,7 +16,7 @@ fi
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-_CLAUDE_CACHE_VERSION=5
+_CLAUDE_CACHE_VERSION=6
 
 # Bundled flags last extended through CHANGELOG version: 2.1.170
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
@@ -228,6 +228,35 @@ _claude_parse_subcommands() {
     done
 }
 
+_claude_parse_subcommand_descriptions() {
+    # Parse "<name><TAB><description>" lines from the "Commands:" section of
+    # help output on stdin. Same row anchoring as _claude_parse_subcommands;
+    # the description is the text after the first 2+ space gap, which skips
+    # alias forms ("update|upgrade") and argument placeholders ("[options]
+    # <name>"). Wrapped descriptions keep only their first line, matching
+    # _claude_parse_flag_descriptions.
+    local in_commands=0
+    local line rest
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^Commands: ]]; then
+            in_commands=1
+            continue
+        fi
+        if [[ $in_commands -eq 1 ]]; then
+            [[ -z "$line" ]] && continue
+            [[ ! "$line" =~ ^[[:space:]] ]] && break
+            local cmd_re='^  ([a-zA-Z][-a-zA-Z]*)(.*)$'
+            if [[ "$line" =~ $cmd_re ]]; then
+                local name="${BASH_REMATCH[1]}"
+                rest="${BASH_REMATCH[2]}"
+                if [[ "$rest" =~ [[:space:]][[:space:]]+([^[:space:]].*)$ ]]; then
+                    printf '%s\t%s\n' "$name" "${BASH_REMATCH[1]}"
+                fi
+            fi
+        fi
+    done
+}
+
 _claude_build_cache() {
     local cache_dir build_dir
     cache_dir="$(_claude_cache_dir)"
@@ -248,6 +277,7 @@ _claude_build_cache() {
     echo "$help_output" | _claude_parse_flags_with_optional_args > "$build_dir/_root_flags_with_optional_args"
     echo "$help_output" | _claude_parse_flag_descriptions > "$build_dir/_root_flag_descriptions"
     echo "$help_output" | _claude_parse_subcommands > "$build_dir/_root_subcommands"
+    echo "$help_output" | _claude_parse_subcommand_descriptions > "$build_dir/_root_subcommand_descriptions"
 
     # Parse each subcommand
     local subcmd
@@ -260,6 +290,7 @@ _claude_build_cache() {
         echo "$sub_help" | _claude_parse_flags_with_optional_args > "$build_dir/${subcmd}_flags_with_optional_args"
         echo "$sub_help" | _claude_parse_flag_descriptions > "$build_dir/${subcmd}_flag_descriptions"
         echo "$sub_help" | _claude_parse_subcommands > "$build_dir/${subcmd}_subcommands"
+        echo "$sub_help" | _claude_parse_subcommand_descriptions > "$build_dir/${subcmd}_subcommand_descriptions"
     done < "$build_dir/_root_subcommands"
 
     # Merge bundled flags into the cache files (skip ones already present from --help).
@@ -558,10 +589,10 @@ _claude_complete_subcmd_arg() {
     esac
 }
 
-_claude_flag_candidates_with_descriptions() {
-    # Build a "flag<TAB>desc" array (printed to stdout, one per line) for the
-    # flags in $1 that match prefix $2. Looks up descriptions in $3.
-    local flags_file="$1"
+_claude_candidates_with_descriptions() {
+    # Build a "value<TAB>desc" list (printed to stdout, one per line) for the
+    # values in $1 that match prefix $2. Looks up descriptions in $3.
+    local list_file="$1"
     local prefix="$2"
     local desc_file="$3"
 
@@ -573,16 +604,37 @@ _claude_flag_candidates_with_descriptions() {
         done < "$desc_file"
     fi
 
-    local flag
-    while IFS= read -r flag; do
-        [[ -z "$flag" ]] && continue
-        [[ "$flag" == "$prefix"* ]] || continue
-        if [[ -n "${descs[$flag]:-}" ]]; then
-            printf '%s\t%s\n' "$flag" "${descs[$flag]}"
+    local value
+    while IFS= read -r value; do
+        [[ -z "$value" ]] && continue
+        [[ "$value" == "$prefix"* ]] || continue
+        if [[ -n "${descs[$value]:-}" ]]; then
+            printf '%s\t%s\n' "$value" "${descs[$value]}"
         else
-            echo "$flag"
+            echo "$value"
         fi
-    done < "$flags_file"
+    done < "$list_file"
+}
+
+_claude_compreply_with_descriptions() {
+    # Fill COMPREPLY from the values in $1 that match prefix $2, rendering
+    # descriptions from $3 when multiple candidates match. A single match or
+    # menu-complete (COMP_TYPE 37/42) inserts the bare value so insertion is
+    # clean.
+    local list_file="$1" prefix="$2" desc_file="$3"
+    local candidates=() line
+    while IFS= read -r line; do
+        candidates+=("$line")
+    done < <(_claude_candidates_with_descriptions "$list_file" "$prefix" "$desc_file")
+    if (( ${#candidates[@]} == 1 )) || [[ ${COMP_TYPE:-9} == @(37|42) ]]; then
+        COMPREPLY=()
+        local c
+        for c in "${candidates[@]}"; do
+            COMPREPLY+=("${c%%$'\t'*}")
+        done
+    else
+        _claude_format_descriptions candidates
+    fi
 }
 
 _claude() {
@@ -651,29 +703,19 @@ _claude() {
 
         if [[ "$cur" == -* ]]; then
             if [[ -f "$cache_dir/${subcmd}_flags" ]]; then
-                local candidates=()
-                while IFS= read -r line; do
-                    candidates+=("$line")
-                done < <(_claude_flag_candidates_with_descriptions \
+                _claude_compreply_with_descriptions \
                     "$cache_dir/${subcmd}_flags" "$cur" \
-                    "$cache_dir/${subcmd}_flag_descriptions")
-                if (( ${#candidates[@]} == 1 )) || [[ ${COMP_TYPE:-9} == @(37|42) ]]; then
-                    # Single match or menu-complete: strip description so insertion is clean.
-                    COMPREPLY=()
-                    local c
-                    for c in "${candidates[@]}"; do
-                        COMPREPLY+=("${c%%$'\t'*}")
-                    done
-                else
-                    _claude_format_descriptions candidates
-                fi
+                    "$cache_dir/${subcmd}_flag_descriptions"
             fi
         elif [[ -n "$sub_subcmd" ]]; then
             # Complete positional args for sub-subcommands
             _claude_complete_subcmd_arg "$subcmd" "$sub_subcmd" "$cur"
         else
+            # Complete sub-subcommands
             if [[ -f "$cache_dir/${subcmd}_subcommands" ]]; then
-                COMPREPLY=( $(compgen -W "$(cat "$cache_dir/${subcmd}_subcommands")" -- "$cur") )
+                _claude_compreply_with_descriptions \
+                    "$cache_dir/${subcmd}_subcommands" "$cur" \
+                    "$cache_dir/${subcmd}_subcommand_descriptions"
             fi
         fi
     else
@@ -681,27 +723,16 @@ _claude() {
         if [[ "$cur" == -* ]]; then
             # Complete flags
             if [[ -f "$cache_dir/_root_flags" ]]; then
-                local candidates=()
-                while IFS= read -r line; do
-                    candidates+=("$line")
-                done < <(_claude_flag_candidates_with_descriptions \
+                _claude_compreply_with_descriptions \
                     "$cache_dir/_root_flags" "$cur" \
-                    "$cache_dir/_root_flag_descriptions")
-                if (( ${#candidates[@]} == 1 )) || [[ ${COMP_TYPE:-9} == @(37|42) ]]; then
-                    # Single match or menu-complete: strip description so insertion is clean.
-                    COMPREPLY=()
-                    local c
-                    for c in "${candidates[@]}"; do
-                        COMPREPLY+=("${c%%$'\t'*}")
-                    done
-                else
-                    _claude_format_descriptions candidates
-                fi
+                    "$cache_dir/_root_flag_descriptions"
             fi
         else
             # Complete subcommands
             if [[ -f "$cache_dir/_root_subcommands" ]]; then
-                COMPREPLY=( $(compgen -W "$(cat "$cache_dir/_root_subcommands")" -- "$cur") )
+                _claude_compreply_with_descriptions \
+                    "$cache_dir/_root_subcommands" "$cur" \
+                    "$cache_dir/_root_subcommand_descriptions"
             fi
         fi
     fi
