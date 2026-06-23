@@ -12,7 +12,7 @@ elif [[ -x "$PROJECT_ROOT/lib/bashunit" ]]; then
     BASHUNIT="$PROJECT_ROOT/lib/bashunit"
 else
     echo "Installing bashunit to lib/..."
-    (cd "$PROJECT_ROOT" && curl -s https://bashunit.typeddevs.com/install.sh | bash)
+    (cd "$PROJECT_ROOT" && curl -s https://bashunit.com/install.sh | bash)
     BASHUNIT="$PROJECT_ROOT/lib/bashunit"
 fi
 

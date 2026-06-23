@@ -105,7 +105,7 @@ Both shells have comprehensive test suites that use mock `claude` commands to av
 
 ### Bash
 
-Tests use [bashunit](https://bashunit.typeddevs.com/) in `tests/bash/`:
+Tests use [bashunit](https://bashunit.com/) in `tests/bash/`:
 
 ```bash
 # Run all tests (installs bashunit automatically if needed)
@@ -133,5 +133,5 @@ Shared test infrastructure lives in `tests/powershell/TestHelper.ps1`.
 
 ### Prerequisites
 
-- [bashunit](https://bashunit.typeddevs.com/installation) (for bash tests; auto-installed by `run-tests.sh` if not found)
+- [bashunit](https://bashunit.com/installation) (for bash tests; auto-installed by `run-tests.sh` if not found)
 - [Pester](https://pester.dev/docs/introduction/installation) v5+ (for PowerShell tests)
