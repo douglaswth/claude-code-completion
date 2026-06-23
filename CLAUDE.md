@@ -22,7 +22,7 @@ Tests use mock `claude` commands to avoid requiring a real installation.
 
 ### Bash
 
-Tests use [bashunit](https://bashunit.typeddevs.com/) in `tests/bash/`:
+Tests use [bashunit](https://bashunit.com/) in `tests/bash/`:
 
 ```bash
 # Run all tests (installs bashunit automatically if needed)
@@ -60,7 +60,7 @@ Wait for the user's input on each area before moving to the next.
 
 ### Prerequisites
 
-- [bashunit](https://bashunit.typeddevs.com/installation) (for bash tests)
+- [bashunit](https://bashunit.com/installation) (for bash tests)
 - [Pester](https://pester.dev/docs/introduction/installation) v5+ (for PowerShell tests)
 
 ## Documentation
