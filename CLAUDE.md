@@ -20,6 +20,8 @@ Bash-specific: optional `jq` dependency for session JSONL parsing, with grep/sed
 
 Tests use mock `claude` commands to avoid requiring a real installation.
 
+Verify as much as possible locally before reporting work done: run every suite whose toolchain is available (bash via bashunit, PowerShell via Pester). Whether a toolchain is installed varies by environment — check before concluding it's missing rather than assuming and skipping the suite. Rely on CI as the fallback for suites that genuinely can't run in the current environment, not as a substitute for running the ones that can.
+
 ### Bash
 
 Tests use [bashunit](https://bashunit.com/) in `tests/bash/`:
