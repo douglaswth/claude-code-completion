@@ -4,9 +4,9 @@
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-$script:ClaudeCacheVersion = 6
+$script:ClaudeCacheVersion = 7
 
-# Bundled flags last extended through CHANGELOG version: 2.1.170
+# Bundled flags last extended through CHANGELOG version: 2.1.197
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Each entry has fields: Scope, Name, TakesArg, ArgType, Description
@@ -17,6 +17,7 @@ $script:ClaudeCacheVersion = 6
 #   ArgType     — 'none' | 'file' | 'dir' | 'choice:a,b,c' | 'unknown'
 #   Description — short text
 $script:ClaudeExtraFlags = @(
+    [pscustomobject]@{ Scope='_root'; Name='--background'; TakesArg='none'; ArgType='none'; Description='Run the session in the background' }
     [pscustomobject]@{ Scope='_root'; Name='--bg'; TakesArg='none'; ArgType='none'; Description='Run the session in the background' }
     [pscustomobject]@{ Scope='_root'; Name='--capacity'; TakesArg='required'; ArgType='unknown'; Description='Max concurrent sessions for --remote-control' }
     [pscustomobject]@{ Scope='_root'; Name='--channels'; TakesArg='required'; ArgType='unknown'; Description='Approved channel servers for this session' }

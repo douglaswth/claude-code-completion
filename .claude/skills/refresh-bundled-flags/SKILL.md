@@ -5,12 +5,24 @@ description: Use when refreshing the inline bundled-flag list in claude.bash and
 
 # Refresh Bundled Flags
 
-Use this skill to add bundled-flag entries for flags that appear in upstream Claude Code CHANGELOG entries but not in the running `claude --help`. This keeps tab-completion useful for hidden flags and for users on lagging installs (e.g. FreeBSD ports).
+Use this skill to maintain the inline bundled-flag list in `claude.bash` and `claude.ps1` — flags the completion offers in addition to whatever it parses live from `claude --help` at completion time.
+
+## Why this list exists (read first)
+
+The completion serves a **range of Claude Code versions in the field at once**, not just the version installed on the machine you're editing from. Distro packages, the FreeBSD `misc/claude-code` port, pinned CI images, and Docker bases routinely run releases behind upstream `main` — the FreeBSD port, for instance, regularly trails the latest by a release or two. Each of those installs parses *its own* `claude --help`, which may not list a flag that newer versions document.
+
+So the bundled list is a safety net for the **field**, and the local `claude --help` is a single, usually-newest sample of it. That has three consequences that drive every decision below:
+
+- **`claude --help` is for arg metadata, not inclusion.** Use it to fill in `takes_arg`/`arg_type`/`scope`, never as the test for whether a flag belongs in the list.
+- **"It's in my local `--help`" is not grounds to skip bundling.** A flag that newer versions surface in `--help` but older fielded versions hide — e.g. `--bg`/`--background`, which only appeared in `--help` in 2.1.187 — still needs a bundled entry for those older installs.
+- **"It's in my local `--help`" is never grounds to remove.** A flag leaves the list only when it's gone from upstream *entirely* and old enough that no still-fielded version exposes it (see Removal Policy).
+
+The list can't carry every flag that ever existed. The practical horizon is "flags real in versions still plausibly in the field." Where that line falls is a human judgment call, not a mechanical rule — surface it to the user rather than guessing.
 
 ## Sources
 
 1. **Primary:** [`anthropics/claude-code/CHANGELOG.md`](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md). Fetch the latest `main` content.
-2. **Secondary cross-reference:** the running `claude --help` and `claude <subcmd> --help`. Use to fill in `takes_arg`/`arg_type` for flags now documented in the running install.
+2. **Secondary cross-reference:** the running `claude --help` and `claude <subcmd> --help`. Use to fill in `takes_arg`/`arg_type`/`scope` — **not** to decide inclusion (see Why this list exists). It's one sample of the field, biased toward the newest release.
 3. **Tertiary, opt-in:** `strings $(readlink -f "$(command -v claude)") | grep -E '^--[a-z]'`. Only run when the user explicitly asks for binary-derived candidates — output is noisy.
 
 ## Workflow
@@ -28,7 +40,7 @@ Use this skill to add bundled-flag entries for flags that appear in upstream Cla
    - Regex: `--[a-z][-a-z]*` over the entry body. Capture the surrounding sentence as a description seed.
    - Identify scope from context (e.g. "added `--foo` to the `mcp` command" → scope `mcp`).
 
-4. **Skip already-bundled flags.** Read both `_CLAUDE_EXTRA_FLAGS` (bash) and `$script:ClaudeExtraFlags` (PS); ignore any candidate whose `name`+`scope` already appears.
+4. **Skip only genuine duplicates.** Read both `_CLAUDE_EXTRA_FLAGS` (bash) and `$script:ClaudeExtraFlags` (PS); ignore a candidate only when its exact `name`+`scope` already appears. Do **not** skip a candidate just because the local `claude --help` documents it — older fielded versions may not (see Why this list exists). When a CHANGELOG entry reveals a flag was hidden from `--help` until version X, bundle it (and its aliases) so installs older than X still complete it.
 
 5. **Classify each new candidate.** Determine the five fields:
    - `scope` — `_root` or subcommand name
@@ -53,11 +65,11 @@ Use this skill to add bundled-flag entries for flags that appear in upstream Cla
 
 ## Removal Policy (separate opt-in pass)
 
-The default workflow above is **append-only**. To check for upstream removals (rare):
+The default workflow above is **append-only**. Removal is rare and easy to get wrong: a bundled flag is a safety net for older fielded installs, so the bar for removing one is "it no longer exists in any version still plausibly in the field," **not** "the latest `claude --help` now documents it." A flag that merely graduated from hidden to documented must stay — that's the whole point of the list (see Why this list exists). To check for genuine upstream removals:
 
 1. Run the tertiary `strings` source on the running `claude` binary.
-2. For each entry in `_CLAUDE_EXTRA_FLAGS`, check whether its `name` appears in the binary strings.
-3. Show flagged candidates to the user; the user decides whether to remove. Manual removals also require a `_CLAUDE_CACHE_VERSION` bump.
+2. For each entry in `_CLAUDE_EXTRA_FLAGS`, check whether its `name` appears in the binary strings. Absence from the *latest* binary is necessary but **not** sufficient — confirm a CHANGELOG entry actually removed the flag, and that no still-fielded install (distro, port, pinned image) is recent enough to lack it yet old enough to have once exposed it.
+3. Show flagged candidates to the user **with that reasoning**; the user decides whether to remove. Manual removals also require a `_CLAUDE_CACHE_VERSION` bump.
 
 ## Editing Conventions
 
