@@ -16,9 +16,9 @@ fi
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-_CLAUDE_CACHE_VERSION=6
+_CLAUDE_CACHE_VERSION=7
 
-# Bundled flags last extended through CHANGELOG version: 2.1.170
+# Bundled flags last extended through CHANGELOG version: 2.1.197
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Format: scope<TAB>name<TAB>takes_arg<TAB>arg_type<TAB>description
@@ -29,6 +29,7 @@ _CLAUDE_CACHE_VERSION=6
 #   arg_type  — none | file | dir | choice:a,b,c | unknown
 #   description — short text; no embedded tabs
 _CLAUDE_EXTRA_FLAGS=(
+    $'_root\t--background\tnone\tnone\tRun the session in the background'
     $'_root\t--bg\tnone\tnone\tRun the session in the background'
     $'_root\t--capacity\trequired\tunknown\tMax concurrent sessions for --remote-control'
     $'_root\t--channels\trequired\tunknown\tApproved channel servers for this session'
