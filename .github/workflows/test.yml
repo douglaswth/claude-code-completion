@@ -27,10 +27,10 @@ jobs:
           bash --version | head -1
 
       - name: Run tests
-        run: bash tests/bash/run-tests.sh
+        run: ./tests/bash/run-tests.sh
 
       - name: Run tests with coverage
-        run: bash tests/bash/run-tests.sh --coverage
+        run: ./tests/bash/run-tests.sh --coverage
 
   powershell:
     runs-on: ${{ matrix.os }}
