@@ -50,6 +50,43 @@ Describe 'Flag argument completion' {
         $results | Should -Contain 'fable'
     }
 
+    It 'expands opus alias to its versioned models' {
+        $r = @(_ClaudeModelCandidates -WordToComplete 'opus')
+        $r | Should -Contain 'opus'
+        $r | Should -Contain 'claude-opus-4-8'
+        $r | Should -Not -Contain 'claude-sonnet-5'
+    }
+
+    It 'expands a partial stem h to the haiku family' {
+        $r = @(_ClaudeModelCandidates -WordToComplete 'h')
+        $r | Should -Contain 'haiku'
+        $r | Should -Contain 'claude-haiku-4-5-20251001'
+    }
+
+    It 'expands sonnet including the bare-numbered claude-sonnet-5' {
+        $r = @(_ClaudeModelCandidates -WordToComplete 'sonnet')
+        $r | Should -Contain 'sonnet'
+        $r | Should -Contain 'claude-sonnet-5'
+        $r | Should -Contain 'claude-sonnet-4-5-20250929'
+    }
+
+    It 'claude- prefix offers no bare alias' {
+        $r = @(_ClaudeModelCandidates -WordToComplete 'claude-op')
+        $r | Should -Contain 'claude-opus-4-8'
+        $r | Should -Not -Contain 'opus'
+    }
+
+    It 'matches a post-claude fragment' {
+        $r = @(_ClaudeModelCandidates -WordToComplete 'opus-4-8')
+        $r | Should -Contain 'claude-opus-4-8'
+    }
+
+    It 'expansion reaches a help-scraped id via its stem' {
+        Get-CompletionText 'claude --model ' | Out-Null
+        $r = @(_ClaudeModelCandidates -WordToComplete 'test')
+        $r | Should -Contain 'claude-test-9-99'
+    }
+
     It 'completes permission mode choices' {
         $results = Get-CompletionText 'claude --permission-mode '
         $results | Should -Contain 'auto'

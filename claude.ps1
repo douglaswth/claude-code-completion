@@ -315,22 +315,32 @@ function global:_ClaudeLookupArgType {
     return $null
 }
 
+function global:_ClaudeModelCandidates {
+    # Return --model completions. A model matches when it starts with
+    # $WordToComplete OR with "claude-$WordToComplete", so an alias stem
+    # (opus/sonnet/haiku/fable) also reaches its claude-<family>-* versions.
+    param([string]$WordToComplete)
+    $models = @($script:_ClaudeKnownModels)
+    $cacheDir = _ClaudeCacheDir
+    $helpFile = Join-Path $cacheDir '_root_help'
+    if (Test-Path $helpFile) {
+        foreach ($line in Get-Content $helpFile) {
+            if ($line -match '(claude-[a-z]+-[0-9][a-z0-9-]*)') {
+                $models += $Matches[1]
+            }
+        }
+    }
+    $models | Select-Object -Unique | Where-Object {
+        $_ -like "$WordToComplete*" -or $_ -like "claude-$WordToComplete*"
+    }
+}
+
 function global:_ClaudeCompleteFlagArg {
     param([string]$Flag, [string]$WordToComplete, [string]$Scope = '_root')
 
     switch ($Flag) {
         '--model' {
-            $models = @($script:_ClaudeKnownModels)
-            $cacheDir = _ClaudeCacheDir
-            $helpFile = Join-Path $cacheDir '_root_help'
-            if (Test-Path $helpFile) {
-                foreach ($line in Get-Content $helpFile) {
-                    if ($line -match '(claude-[a-z]+-[0-9][a-z0-9-]*)') {
-                        $models += $Matches[1]
-                    }
-                }
-            }
-            $models | Select-Object -Unique | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+            _ClaudeModelCandidates -WordToComplete $WordToComplete | ForEach-Object {
                 [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
             }
         }
