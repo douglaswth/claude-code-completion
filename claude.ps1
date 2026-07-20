@@ -473,10 +473,13 @@ function global:_ClaudeCompleteSessions {
 
     if (-not (Test-Path $sessionDir)) { return }
 
+    # Sorted newest-first. The 10-session cap is applied *after* the prefix
+    # filter below, so a unique match older than the 10 newest sessions is
+    # still reachable.
     $files = Get-ChildItem -Path $sessionDir -Filter '*.jsonl' -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending |
-        Select-Object -First 10
+        Sort-Object LastWriteTime -Descending
 
+    $emitted = 0
     foreach ($file in $files) {
         $sessionId = $file.BaseName
         if ($sessionId -like "$WordToComplete*") {
@@ -489,6 +492,9 @@ function global:_ClaudeCompleteSessions {
                 'ParameterValue',
                 $msg
             )
+            # Files are newest-first, so the first 10 matches are the 10 newest.
+            $emitted++
+            if ($emitted -ge 10) { break }
         }
     }
 }

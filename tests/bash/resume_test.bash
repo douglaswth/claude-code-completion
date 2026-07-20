@@ -104,6 +104,62 @@ function test_no_user_message_falls_back_to_session_label() {
     assert_contains "(session)" "$result"
 }
 
+# --- 10-session cap is applied after the prefix filter ---
+# Regression: a unique match older than the 10 newest sessions must still
+# complete. The cap exists to avoid dumping many candidates, not to hide a
+# specifically-requested older session.
+
+# Distinctive prefix that only the oldest (12th-newest) session carries.
+_MANY_SESSIONS_OLD_ID="01d01d01-0000-0000-0000-000000000000"
+
+# Build a project dir holding 12 sessions where _MANY_SESSIONS_OLD_ID is the
+# oldest, and point _claude_encoded_cwd at it. Paired with
+# _teardown_many_sessions.
+function _setup_many_sessions() {
+    local proj_dir="$MOCK_HOME/.claude/projects/-home-user-manysessions"
+    mkdir -p "$proj_dir"
+
+    cat > "$proj_dir/$_MANY_SESSIONS_OLD_ID.jsonl" << 'SESSION'
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Ancient session"}]},"timestamp":"2026-01-01T00:00:00.000Z"}
+SESSION
+    touch -t 202601010000 "$proj_dir/$_MANY_SESSIONS_OLD_ID.jsonl"
+
+    # 11 newer sessions so the old one sits outside the 10-newest cap.
+    local i id
+    for (( i = 1; i <= 11; i++ )); do
+        printf -v id 'f00000%02d-0000-0000-0000-000000000000' "$i"
+        printf '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Session %d"}]},"timestamp":"2026-02-01T00:00:00.000Z"}\n' "$i" \
+            > "$proj_dir/$id.jsonl"
+        touch -t "$(printf '202602%02d0000' "$i")" "$proj_dir/$id.jsonl"
+    done
+
+    eval '_claude_encoded_cwd() { echo "-home-user-manysessions"; }'
+}
+
+function _teardown_many_sessions() {
+    rm -rf "$MOCK_HOME/.claude/projects/-home-user-manysessions"
+    # Restore the test override for subsequent tests
+    eval '_claude_encoded_cwd() { echo "-home-user-myproject"; }'
+}
+
+function test_cap_hides_sessions_beyond_ten_newest() {
+    _setup_many_sessions
+    COMPREPLY=()
+    _claude_complete_sessions ""
+    assert_equals "10" "${#COMPREPLY[@]}"
+    assert_not_contains "$_MANY_SESSIONS_OLD_ID" "${COMPREPLY[*]}"
+    _teardown_many_sessions
+}
+
+function test_older_match_beyond_cap_still_completes() {
+    _setup_many_sessions
+    COMPREPLY=()
+    _claude_complete_sessions "01d"
+    assert_equals "1" "${#COMPREPLY[@]}"
+    assert_contains "$_MANY_SESSIONS_OLD_ID" "${COMPREPLY[*]}"
+    _teardown_many_sessions
+}
+
 # --- End-to-end tests via simulate_completion ---
 
 function test_e2e_resume_shows_sessions() {

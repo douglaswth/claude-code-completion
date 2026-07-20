@@ -86,3 +86,4 @@ Design documents and implementation plans live in `docs/plans/`. **Start a featu
 Existing design documents:
 
 - `docs/plans/2026-03-02-bash-completion-design.md` — design decisions and rationale
+- `docs/plans/2026-07-20-resume-completion-ordering.md` — `--resume` completion: filter by prefix before capping to 10

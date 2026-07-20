@@ -417,14 +417,16 @@ _claude_complete_sessions() {
 
     [[ -d "$session_dir" ]] || return
 
-    # List JSONL files sorted by modification time (newest first), limit to 10
+    # List JSONL files sorted by modification time (newest first).
     # Uses ls -1t for portability (GNU find -printf / head -z / cut -z are not
     # available on macOS).  Session filenames are UUIDs so globbing is safe.
+    # The 10-session cap is applied *after* the prefix filter below, so a unique
+    # match older than the 10 newest sessions is still reachable.
     local files=()
     local _f
     while IFS= read -r _f; do
         files+=("$_f")
-    done < <(ls -1t "$session_dir"/*.jsonl 2>/dev/null | head -n 10)
+    done < <(ls -1t "$session_dir"/*.jsonl 2>/dev/null)
 
     local tab=$'\t'
     local candidates=()
@@ -435,6 +437,8 @@ _claude_complete_sessions() {
             local msg
             msg="$(_claude_session_message "$file")"
             candidates+=("${session_id}${tab}${msg:-(session)}")
+            # Files are newest-first, so the first 10 matches are the 10 newest.
+            (( ${#candidates[@]} >= 10 )) && break
         fi
     done
 
