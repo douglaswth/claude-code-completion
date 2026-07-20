@@ -18,7 +18,7 @@ fi
 # same CLI version.
 _CLAUDE_CACHE_VERSION=7
 
-# Bundled flags last extended through CHANGELOG version: 2.1.197
+# Bundled flags last extended through CHANGELOG version: 2.1.215
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Format: scope<TAB>name<TAB>takes_arg<TAB>arg_type<TAB>description

@@ -11,10 +11,11 @@ Use this skill to maintain the inline bundled-flag list in `claude.bash` and `cl
 
 The completion serves a **range of Claude Code versions in the field at once**, not just the version installed on the machine you're editing from. Distro packages, the FreeBSD `misc/claude-code` port, pinned CI images, and Docker bases routinely run releases behind upstream `main` — the FreeBSD port, for instance, regularly trails the latest by a release or two. Each of those installs parses *its own* `claude --help`, which may not list a flag that newer versions document.
 
-So the bundled list is a safety net for the **field**, and the local `claude --help` is a single, usually-newest sample of it. That has three consequences that drive every decision below:
+So the bundled list is a safety net for the **field**, and the local `claude --help` is a single, usually-newest sample of it. That has four consequences that drive every decision below:
 
 - **`claude --help` is for arg metadata, not inclusion.** Use it to fill in `takes_arg`/`arg_type`/`scope`, never as the test for whether a flag belongs in the list.
 - **"It's in my local `--help`" is not grounds to skip bundling.** A flag that newer versions surface in `--help` but older fielded versions hide — e.g. `--bg`/`--background`, which only appeared in `--help` in 2.1.187 — still needs a bundled entry for those older installs.
+- **A CHANGELOG "Added `--flag`" is not by itself grounds to bundle.** Bundling only earns its keep when some still-fielded version has the flag *functionally* but omits it from `--help` — the hidden window (`--bg` again). If a flag is visible in `--help` from the version it first appears in, live parsing already surfaces it on every version that has it, and a bundled entry merely offers a nonexistent flag on older versions. Confirm the hidden window before including — don't infer it from changelog phrasing (see Workflow step 5).
 - **"It's in my local `--help`" is never grounds to remove.** A flag leaves the list only when it's gone from upstream *entirely* and old enough that no still-fielded version exposes it (see Removal Policy).
 
 The list can't carry every flag that ever existed. The practical horizon is "flags real in versions still plausibly in the field." Where that line falls is a human judgment call, not a mechanical rule — surface it to the user rather than guessing.
@@ -42,7 +43,16 @@ The list can't carry every flag that ever existed. The practical horizon is "fla
 
 4. **Skip only genuine duplicates.** Read both `_CLAUDE_EXTRA_FLAGS` (bash) and `$script:ClaudeExtraFlags` (PS); ignore a candidate only when its exact `name`+`scope` already appears. Do **not** skip a candidate just because the local `claude --help` documents it — older fielded versions may not (see Why this list exists). When a CHANGELOG entry reveals a flag was hidden from `--help` until version X, bundle it (and its aliases) so installs older than X still complete it.
 
-5. **Classify each new candidate.** Determine the five fields:
+5. **Verify the hidden window before including (inclusion gate).** A candidate belongs in the list only if some still-fielded version has it *functionally* but omits it from `--help`. Establish that against the authoritative source — the real `--help` of the introducing version — not the changelog wording:
+   ```
+   npx --yes @anthropic-ai/claude-code@<introducing-version> --help | grep -- '--the-flag'
+   npx --yes @anthropic-ai/claude-code@<version-before>     --help | grep -- '--the-flag'
+   ```
+   - **Visible in `--help` at (or before) its introducing version** → no hidden window; live parsing already covers it on every version that has it. **Do not bundle.** (Common for user-facing flags announced as "Added `--flag`".)
+   - **Functional but absent from `--help`** in some fielded version (the `--bg` pattern — the flag works but isn't listed) → bundle it and its aliases so those installs still complete it.
+   - Existing bundled entries are almost all flags hidden from the current `--help` (`--spawn`, `--channels`, `--session-mirror`, …). A candidate that *does* show up in the current `--help` is a strong signal it does **not** need bundling — check before adding.
+
+6. **Classify each new candidate.** Determine the five fields:
    - `scope` — `_root` or subcommand name
    - `name` — `--foo` (one entry per form; short forms are separate entries with the same metadata)
    - `takes_arg` — `none`, `required`, or `optional`. Determine from the placeholder syntax in the CHANGELOG / secondary `--help`:
@@ -53,9 +63,9 @@ The list can't carry every flag that ever existed. The practical horizon is "fla
    - `arg_type` — `none`, `file`, `dir`, `choice:a,b,c`, or `unknown`
    - `description` — short string trimmed from the CHANGELOG entry; no embedded tabs
 
-6. **Show diff to user.** Group additions by scope. Allow user edits before applying.
+7. **Show diff to user.** Group additions by scope. Allow user edits before applying.
 
-7. **Apply.** In lockstep:
+8. **Apply.** In lockstep:
    - Edit `claude.bash`: insert each new entry into `_CLAUDE_EXTRA_FLAGS` as a `$'scope\tname\ttakes_arg\targ_type\tdescription'` line.
    - Edit `claude.ps1`: insert each new entry into `$script:ClaudeExtraFlags` as a `[pscustomobject]@{...}` line.
    - Update both marker comments to the highest CHANGELOG version processed.
