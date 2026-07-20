@@ -162,6 +162,52 @@ Describe 'End-to-end resume completion' {
     }
 }
 
+Describe '10-session cap applied after prefix filter' {
+    # Regression: a unique match older than the 10 newest sessions must still
+    # complete. The cap avoids dumping many candidates; it must not hide a
+    # specifically-requested older session.
+    BeforeAll {
+        $script:ManyDir = Join-Path (Join-Path (Join-Path $script:MockHome '.claude') 'projects') '-home-user-manysessions'
+        New-Item -ItemType Directory -Path $script:ManyDir -Force | Out-Null
+
+        # Oldest session, distinctive prefix, made the 12th-newest below.
+        $oldId = '01d01d01-0000-0000-0000-000000000000'
+        $file = Join-Path $script:ManyDir "$oldId.jsonl"
+        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Ancient session"}]},"timestamp":"2026-01-01T00:00:00.000Z"}' |
+            Set-Content $file
+        (Get-Item $file).LastWriteTime = [datetime]'2026-01-01'
+
+        # 11 newer sessions so $oldId sits outside the 10-newest cap.
+        foreach ($i in 1..11) {
+            $id = 'f00000{0:D2}-0000-0000-0000-000000000000' -f $i
+            $f = Join-Path $script:ManyDir "$id.jsonl"
+            "{`"type`":`"user`",`"message`":{`"role`":`"user`",`"content`":[{`"type`":`"text`",`"text`":`"Session $i`"}]},`"timestamp`":`"2026-02-01T00:00:00.000Z`"}" |
+                Set-Content $f
+            (Get-Item $f).LastWriteTime = ([datetime]'2026-02-01').AddDays($i)
+        }
+
+        function global:_ClaudeEncodedCwd { '-home-user-manysessions' }
+    }
+
+    AfterAll {
+        Remove-Item $script:ManyDir -Recurse -Force -ErrorAction SilentlyContinue
+        # Restore the test override for subsequent tests
+        function global:_ClaudeEncodedCwd { '-home-user-myproject' }
+    }
+
+    It 'empty prefix is capped at 10 newest, hiding the older session' {
+        $results = @(_ClaudeCompleteSessions -WordToComplete '')
+        $results.Count | Should -Be 10
+        $results.CompletionText | Should -Not -Contain '01d01d01-0000-0000-0000-000000000000'
+    }
+
+    It 'unique older match beyond the cap still completes' {
+        $results = @(_ClaudeCompleteSessions -WordToComplete '01d')
+        $results.Count | Should -Be 1
+        $results.CompletionText | Should -Contain '01d01d01-0000-0000-0000-000000000000'
+    }
+}
+
 Describe 'Resume completion with symlinked CWD' -Skip:($IsWindows -or $PSVersionTable.PSVersion.Major -le 5) {
     BeforeAll {
         # Create a real directory and a symlink to it
