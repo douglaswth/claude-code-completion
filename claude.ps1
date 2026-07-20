@@ -6,7 +6,7 @@
 # same CLI version.
 $script:ClaudeCacheVersion = 7
 
-# Bundled flags last extended through CHANGELOG version: 2.1.197
+# Bundled flags last extended through CHANGELOG version: 2.1.215
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Each entry has fields: Scope, Name, TakesArg, ArgType, Description
