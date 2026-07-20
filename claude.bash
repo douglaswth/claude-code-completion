@@ -488,6 +488,33 @@ _claude_lookup_arg_type() {
     done < "$file"
 }
 
+_claude_model_candidates() {
+    # Print --model completions, one per line, deduplicated. A model matches
+    # when it starts with $cur OR with "claude-$cur", so an alias stem
+    # (opus/sonnet/haiku/fable) also reaches its claude-<family>-* versions.
+    local cur="$1"
+    local models=("${_CLAUDE_KNOWN_MODELS[@]}")
+    local cache_dir line
+    cache_dir="$(_claude_cache_dir)"
+    if [[ -f "$cache_dir/_root_help" ]]; then
+        while IFS= read -r line; do
+            if [[ "$line" =~ claude-[a-z]+-[0-9][a-z0-9-]* ]]; then
+                models+=("${BASH_REMATCH[0]}")
+            fi
+        done < "$cache_dir/_root_help"
+    fi
+    local m
+    local -A seen=()
+    for m in "${models[@]}"; do
+        if [[ "$m" == "$cur"* || "$m" == "claude-$cur"* ]]; then
+            if [[ -z "${seen[$m]:-}" ]]; then
+                seen[$m]=1
+                printf '%s\n' "$m"
+            fi
+        fi
+    done
+}
+
 _claude_complete_flag_arg() {
     # Complete arguments for flags that take values
     # $1 = flag name, $2 = current word, $3 = scope (default: _root)
@@ -497,19 +524,11 @@ _claude_complete_flag_arg() {
 
     case "$flag" in
         --model)
-            # Merge aliases + hardcoded + help-parsed models
-            local models=("${_CLAUDE_KNOWN_MODELS[@]}")
-            # Add any models from help output (look for model IDs in help text)
-            local cache_dir
-            cache_dir="$(_claude_cache_dir)"
-            if [[ -f "$cache_dir/_root_help" ]]; then
-                while IFS= read -r line; do
-                    if [[ "$line" =~ claude-[a-z]+-[0-9][a-z0-9-]* ]]; then
-                        models+=("${BASH_REMATCH[0]}")
-                    fi
-                done < "$cache_dir/_root_help"
-            fi
-            COMPREPLY=( $(compgen -W "${models[*]}" -- "$cur") )
+            COMPREPLY=()
+            local _model
+            while IFS= read -r _model; do
+                COMPREPLY+=("$_model")
+            done < <(_claude_model_candidates "$cur")
             ;;
         --permission-mode)
             COMPREPLY=( $(compgen -W "acceptEdits auto bypassPermissions default dontAsk plan" -- "$cur") )

@@ -112,6 +112,60 @@ function test_model_completes_bare_fable_alias() {
     assert_contains "fable" "$result"
 }
 
+function test_model_alias_expands_to_versioned_family() {
+    local out
+    out="$(_claude_model_candidates "opus")"
+    assert_equals "opus" "$(grep -x 'opus' <<< "$out")"
+    assert_contains "claude-opus-4-8" "$out"
+    assert_not_contains "claude-sonnet" "$out"
+    assert_not_contains "claude-haiku" "$out"
+}
+
+function test_model_alias_partial_stem_expands() {
+    local out
+    out="$(_claude_model_candidates "h")"
+    assert_equals "haiku" "$(grep -x 'haiku' <<< "$out")"
+    assert_contains "claude-haiku-4-5-20251001" "$out"
+}
+
+function test_model_sonnet_alias_expands_including_bare_numbered() {
+    # sonnet family has both claude-sonnet-5 and claude-sonnet-4-5-...
+    local out
+    out="$(_claude_model_candidates "sonnet")"
+    assert_equals "sonnet" "$(grep -x 'sonnet' <<< "$out")"
+    assert_contains "claude-sonnet-5" "$out"
+    assert_contains "claude-sonnet-4-5-20250929" "$out"
+}
+
+function test_model_claude_prefix_offers_no_bare_alias() {
+    local out
+    out="$(_claude_model_candidates "claude-op")"
+    assert_contains "claude-opus-4-8" "$out"
+    assert_equals "" "$(grep -x 'opus' <<< "$out")"
+}
+
+function test_model_post_claude_fragment_matches() {
+    local out
+    out="$(_claude_model_candidates "opus-4-8")"
+    assert_equals "claude-opus-4-8" "$(grep -x 'claude-opus-4-8' <<< "$out")"
+}
+
+function test_model_empty_stem_returns_full_set() {
+    local out
+    out="$(_claude_model_candidates "")"
+    assert_equals "opus" "$(grep -x 'opus' <<< "$out")"
+    assert_contains "claude-opus-4-8" "$out"
+    assert_equals "sonnet" "$(grep -x 'sonnet' <<< "$out")"
+}
+
+function test_model_expansion_reaches_help_scraped_id() {
+    # Populate the help cache, then reach the scraped id via its post-claude- stem.
+    simulate_completion "claude --model " >/dev/null
+    local out
+    out="$(_claude_model_candidates "test")"
+    assert_contains "claude-test-9-99" "$out"
+}
+
 function test_add_dir_completes_directories() {
     local result
     result="$(simulate_completion "claude --add-dir $COMP_DIR/")"
