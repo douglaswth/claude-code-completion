@@ -82,7 +82,7 @@ After installation, press `Tab` to complete:
 ```
 claude <TAB>           # subcommands (auth, mcp, plugin, ...) with descriptions
 claude -<TAB>          # flags (--model, --resume, --print, ...) with descriptions
-claude --model <TAB>   # model names (sonnet, opus, haiku, ...)
+claude --model <TAB>   # aliases (sonnet, opus, haiku, fable); a stem also expands to that family's pinned versions
 claude --resume <TAB>  # session IDs with message previews
 claude mcp <TAB>       # mcp subcommands (add, get, list, remove)
 claude mcp get <TAB>   # configured MCP server names
@@ -93,7 +93,7 @@ claude mcp get <TAB>   # configured MCP server names
 ```powershell
 claude <Tab>           # subcommands with tooltip descriptions
 claude -<Tab>          # flags with tooltip descriptions
-claude --model <Tab>   # model names (sonnet, opus, haiku, ...)
+claude --model <Tab>   # aliases (sonnet, opus, haiku, fable); a stem also expands to that family's pinned versions
 claude --resume <Tab>  # session IDs with message previews
 claude mcp <Tab>       # mcp subcommands (add, get, list, remove)
 claude mcp get <Tab>   # configured MCP server names
