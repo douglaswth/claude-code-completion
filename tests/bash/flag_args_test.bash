@@ -104,6 +104,14 @@ function test_model_partial_input_filters() {
     assert_not_contains "opus" "$result"
 }
 
+function test_model_completes_bare_fable_alias() {
+    # Bare `fable` alias (like opus/sonnet/haiku) — the stem "fabl" matches the
+    # bare alias but not claude-fable-5 under plain prefix matching.
+    local result
+    result="$(simulate_completion "claude --model fabl")"
+    assert_contains "fable" "$result"
+}
+
 function test_add_dir_completes_directories() {
     local result
     result="$(simulate_completion "claude --add-dir $COMP_DIR/")"

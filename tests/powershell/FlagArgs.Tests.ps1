@@ -45,6 +45,11 @@ Describe 'Flag argument completion' {
         $results | Should -Contain 'haiku'
     }
 
+    It 'completes the bare fable alias' {
+        $results = @(Get-CompletionText 'claude --model fabl')
+        $results | Should -Contain 'fable'
+    }
+
     It 'completes permission mode choices' {
         $results = Get-CompletionText 'claude --permission-mode '
         $results | Should -Contain 'auto'

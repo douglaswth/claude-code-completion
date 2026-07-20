@@ -289,7 +289,7 @@ function global:_ClaudeParseFlagDescriptions {
 }
 
 $script:_ClaudeKnownModels = @(
-    'sonnet', 'opus', 'haiku',
+    'sonnet', 'opus', 'haiku', 'fable',
     'claude-fable-5',
     'claude-sonnet-4-5-20250929',
     'claude-sonnet-4-6',

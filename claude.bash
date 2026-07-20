@@ -459,7 +459,7 @@ _claude_complete_sessions() {
 
 # Hardcoded model IDs (update when new models are released)
 _CLAUDE_KNOWN_MODELS=(
-    sonnet opus haiku
+    sonnet opus haiku fable
     claude-fable-5
     claude-sonnet-4-5-20250929
     claude-sonnet-4-6
