@@ -288,16 +288,30 @@ function global:_ClaudeParseFlagDescriptions {
     }
 }
 
+# Hardcoded model IDs (update when new models are released).
+# Order is the display order, following Anthropic's canonical catalog order:
+# documented aliases first (each [1m] variant next to its base alias), then
+# capability tier descending (fable, opus, sonnet, haiku) with each tier's
+# versions newest-first. Alias set per code.claude.com/docs/en/model-config.
+# PowerShell shows completions in the order they are returned; bash needs
+# `compopt -o nosort` (see _claude_model_candidates callers in claude.bash).
+# Keep this list and _CLAUDE_KNOWN_MODELS in claude.bash in sync.
 $script:_ClaudeKnownModels = @(
-    'sonnet', 'opus', 'haiku', 'fable',
+    'best',
+    'fable', 'fable[1m]',
+    'opus', 'opus[1m]',
+    'sonnet', 'sonnet[1m]',
+    'haiku',
+    'opusplan', 'opusplan[1m]',
     'claude-fable-5',
-    'claude-sonnet-4-5-20250929',
-    'claude-sonnet-4-6',
-    'claude-sonnet-5',
-    'claude-opus-4-5-20251101',
-    'claude-opus-4-6',
-    'claude-opus-4-7',
+    'claude-opus-5',
     'claude-opus-4-8',
+    'claude-opus-4-7',
+    'claude-opus-4-6',
+    'claude-opus-4-5-20251101',
+    'claude-sonnet-5',
+    'claude-sonnet-4-6',
+    'claude-sonnet-4-5-20250929',
     'claude-haiku-4-5-20251001'
 )
 
@@ -330,8 +344,11 @@ function global:_ClaudeModelCandidates {
             }
         }
     }
+    # Ordinal StartsWith rather than -like: the [1m] aliases contain [ and ],
+    # which -like would read as a wildcard character class.
     $models | Select-Object -Unique | Where-Object {
-        $_ -like "$WordToComplete*" -or $_ -like "claude-$WordToComplete*"
+        $_.StartsWith($WordToComplete, [System.StringComparison]::Ordinal) -or
+        $_.StartsWith("claude-$WordToComplete", [System.StringComparison]::Ordinal)
     }
 }
 

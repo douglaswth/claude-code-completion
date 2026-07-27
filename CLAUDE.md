@@ -87,3 +87,4 @@ Existing design documents:
 
 - `docs/plans/2026-03-02-bash-completion-design.md` — design decisions and rationale
 - `docs/plans/2026-07-20-resume-completion-ordering.md` — `--resume` completion: filter by prefix before capping to 10
+- `docs/plans/2026-07-27-model-completion-ordering.md` — `--model` completion: canonical catalog order, and the `nosort` that makes bash honor it

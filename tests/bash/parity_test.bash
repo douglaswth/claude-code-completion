@@ -31,6 +31,27 @@ extract_ps_extra_flags() {
     done | sort
 }
 
+# The known-model lists are a display-order contract, so compare them
+# unsorted: both shells must offer the same models in the same order.
+extract_bash_known_models() {
+    (
+        source "$BASH_SCRIPT" >/dev/null 2>&1
+        printf '%s\n' "${_CLAUDE_KNOWN_MODELS[@]}"
+    )
+}
+
+extract_ps_known_models() {
+    sed -n '/^\$script:_ClaudeKnownModels = @(/,/^)/p' "$PS_SCRIPT" \
+        | grep -oE "'[^']+'" | tr -d "'"
+}
+
+function test_known_model_lists_match_in_order() {
+    local bash_out ps_out
+    bash_out="$(extract_bash_known_models)"
+    ps_out="$(extract_ps_known_models)"
+    assert_equals "$bash_out" "$ps_out"
+}
+
 function test_bundled_flag_sets_match() {
     local bash_out ps_out
     bash_out="$(extract_bash_extra_flags)"

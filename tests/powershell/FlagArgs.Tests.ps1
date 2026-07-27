@@ -54,7 +54,38 @@ Describe 'Flag argument completion' {
         $r = @(_ClaudeModelCandidates -WordToComplete 'opus')
         $r | Should -Contain 'opus'
         $r | Should -Contain 'claude-opus-4-8'
+        $r | Should -Contain 'claude-opus-5'
         $r | Should -Not -Contain 'claude-sonnet-5'
+    }
+
+    It 'returns candidates in canonical catalog order' {
+        # Documented aliases first (each [1m] next to its base), then capability
+        # tier descending (fable, opus, sonnet, haiku), newest version first per
+        # tier. Probe a representative subset so help-scraped ids can't perturb it.
+        $probe = @(
+            'best', 'fable', 'fable[1m]', 'opus', 'opus[1m]', 'sonnet', 'sonnet[1m]',
+            'haiku', 'opusplan', 'opusplan[1m]',
+            'claude-fable-5', 'claude-opus-5', 'claude-opus-4-8',
+            'claude-sonnet-5', 'claude-haiku-4-5-20251001'
+        )
+        $r = @(_ClaudeModelCandidates -WordToComplete '')
+        (($r | Where-Object { $probe -contains $_ }) -join ',') |
+            Should -Be ($probe -join ',')
+    }
+
+    It 'orders a family newest-version-first' {
+        $r = @(_ClaudeModelCandidates -WordToComplete 'opus')
+        ($r -join ',') | Should -Be (@(
+            'opus', 'opus[1m]', 'opusplan', 'opusplan[1m]',
+            'claude-opus-5', 'claude-opus-4-8',
+            'claude-opus-4-7', 'claude-opus-4-6', 'claude-opus-4-5-20251101'
+        ) -join ',')
+    }
+
+    It 'matches an extended-context alias without treating [ as a wildcard' {
+        # -like would throw WildcardPatternException on the pattern 'opus[1*'.
+        $r = @(_ClaudeModelCandidates -WordToComplete 'opus[1')
+        ($r -join ',') | Should -Be 'opus[1m]'
     }
 
     It 'expands a partial stem h to the haiku family' {
