@@ -369,6 +369,14 @@ _claude_session_message() {
     fi
 }
 
+_claude_preserve_order() {
+    # Keep COMPREPLY in the order we built it. Without this, readline sorts the
+    # matches alphabetically before display. No-op on bash < 4.4 (no nosort).
+    if [[ ${BASH_VERSINFO[0]} -ge 5 || (${BASH_VERSINFO[0]} -eq 4 && ${BASH_VERSINFO[1]} -ge 4) ]]; then
+        compopt -o nosort 2>/dev/null || true
+    fi
+}
+
 _claude_format_descriptions() {
     # Format completion candidates with aligned descriptions (Cobra/kubectl pattern).
     # Takes array name containing "value\tdescription" entries.
@@ -403,10 +411,7 @@ _claude_format_descriptions() {
         COMPREPLY+=("$comp")
     done
 
-    # Preserve display order on bash 4.4+
-    if [[ ${BASH_VERSINFO[0]} -ge 5 || (${BASH_VERSINFO[0]} -eq 4 && ${BASH_VERSINFO[1]} -ge 4) ]]; then
-        compopt -o nosort 2>/dev/null || true
-    fi
+    _claude_preserve_order
 }
 
 _claude_complete_sessions() {
@@ -457,17 +462,28 @@ _claude_complete_sessions() {
     fi
 }
 
-# Hardcoded model IDs (update when new models are released)
+# Hardcoded model IDs (update when new models are released).
+# Order is the display order, following Anthropic's canonical catalog order:
+# documented aliases first (each [1m] variant next to its base alias), then
+# capability tier descending (fable, opus, sonnet, haiku) with each tier's
+# versions newest-first. Alias set per code.claude.com/docs/en/model-config.
+# Keep this list and $script:_ClaudeKnownModels in claude.ps1 in sync.
 _CLAUDE_KNOWN_MODELS=(
-    sonnet opus haiku fable
+    best
+    fable fable[1m]
+    opus opus[1m]
+    sonnet sonnet[1m]
+    haiku
+    opusplan opusplan[1m]
     claude-fable-5
-    claude-sonnet-4-5-20250929
-    claude-sonnet-4-6
-    claude-sonnet-5
-    claude-opus-4-5-20251101
-    claude-opus-4-6
-    claude-opus-4-7
+    claude-opus-5
     claude-opus-4-8
+    claude-opus-4-7
+    claude-opus-4-6
+    claude-opus-4-5-20251101
+    claude-sonnet-5
+    claude-sonnet-4-6
+    claude-sonnet-4-5-20250929
     claude-haiku-4-5-20251001
 )
 
@@ -492,7 +508,9 @@ _claude_model_candidates() {
     # Print --model completions, one per line, deduplicated. A model matches
     # when it starts with $cur OR with "claude-$cur", so an alias stem
     # (opus/sonnet/haiku/fable) also reaches its claude-<family>-* versions.
-    local cur="$1"
+    # Backslashes are stripped from $cur first: readline hands back the word as
+    # typed, so a partially typed "opus\[1" must match the literal "opus[1m]".
+    local cur="${1//\\/}"
     local models=("${_CLAUDE_KNOWN_MODELS[@]}")
     local cache_dir line
     cache_dir="$(_claude_cache_dir)"
@@ -525,10 +543,17 @@ _claude_complete_flag_arg() {
     case "$flag" in
         --model)
             COMPREPLY=()
-            local _model
+            local _model _escaped
             while IFS= read -r _model; do
-                COMPREPLY+=("$_model")
+                # The [1m] aliases carry glob metacharacters; %q escapes them so
+                # the word inserts literally instead of pathname-expanding.
+                # Plain ids pass through %q unchanged.
+                printf -v _escaped '%q' "$_model"
+                COMPREPLY+=("$_escaped")
             done < <(_claude_model_candidates "$cur")
+            # Candidates are already in canonical catalog order; don't let
+            # readline re-sort them alphabetically.
+            _claude_preserve_order
             ;;
         --permission-mode)
             COMPREPLY=( $(compgen -W "acceptEdits auto bypassPermissions default dontAsk plan" -- "$cur") )

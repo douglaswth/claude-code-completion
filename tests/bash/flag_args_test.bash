@@ -113,12 +113,69 @@ function test_model_completes_bare_fable_alias() {
 }
 
 function test_model_alias_expands_to_versioned_family() {
+    # opus family has both dotted-version ids and the bare-numbered claude-opus-5
     local out
     out="$(_claude_model_candidates "opus")"
     assert_equals "opus" "$(grep -x 'opus' <<< "$out")"
     assert_contains "claude-opus-4-8" "$out"
+    assert_contains "claude-opus-5" "$out"
     assert_not_contains "claude-sonnet" "$out"
     assert_not_contains "claude-haiku" "$out"
+}
+
+function test_model_candidates_follow_canonical_order() {
+    # Documented aliases first (each [1m] next to its base), then capability
+    # tier descending (fable, opus, sonnet, haiku), newest version first per
+    # tier. Probe a representative subset (fixed strings, so the [1m] brackets
+    # stay literal) to stay stable when a help-scraped id is present.
+    local expected out probe
+    expected="best
+fable
+fable[1m]
+opus
+opus[1m]
+sonnet
+sonnet[1m]
+haiku
+opusplan
+opusplan[1m]
+claude-fable-5
+claude-opus-5
+claude-opus-4-8
+claude-sonnet-5
+claude-haiku-4-5-20251001"
+    out="$(_claude_model_candidates "")"
+    probe="$(grep -x -F -f <(printf '%s\n' "$expected") <<< "$out")"
+    assert_equals "$expected" "$probe"
+}
+
+function test_model_family_versions_are_newest_first() {
+    local out
+    out="$(_claude_model_candidates "opus")"
+    assert_equals "opus
+opus[1m]
+opusplan
+opusplan[1m]
+claude-opus-5
+claude-opus-4-8
+claude-opus-4-7
+claude-opus-4-6
+claude-opus-4-5-20251101" "$out"
+}
+
+function test_model_extended_context_alias_matches_escaped_stem() {
+    # readline hands back the word as typed, so a partially typed bracket
+    # arrives escaped; it must still match the literal alias.
+    local out
+    out="$(_claude_model_candidates 'opus\[1')"
+    assert_equals "opus[1m]" "$out"
+}
+
+function test_model_extended_context_alias_is_escaped_for_insertion() {
+    # Unescaped, "opus[1m]" would pathname-expand on the command line.
+    local result
+    result="$(simulate_completion "claude --model opus[1")"
+    assert_equals 'opus\[1m\]' "$result"
 }
 
 function test_model_alias_partial_stem_expands() {
