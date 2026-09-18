@@ -9,8 +9,8 @@
 # executes.
 #
 # Every timed build runs in its own child process with its own
-# XDG_CACHE_HOME — which _ClaudeCacheBase honours ahead of LOCALAPPDATA on
-# Windows — so a run never reads a cache another run published.
+# XDG_CACHE_HOME -- which _ClaudeCacheBase honours ahead of LOCALAPPDATA on
+# Windows -- so a run never reads a cache another run published.
 
 $ErrorActionPreference = 'Stop'
 
@@ -98,17 +98,17 @@ $baselineMean = [math]::Round(($baselineTimes | Measure-Object -Average).Average
 $branchMean = [math]::Round(($branchTimes | Measure-Object -Average).Average, 2)
 
 $lines = @()
-$lines += "### $shellExe $($PSVersionTable.PSVersion) — $cores cores, concurrency $concurrency, parallel probes: $parallel"
+$lines += "### $shellExe $($PSVersionTable.PSVersion) -- $cores cores, concurrency $concurrency, parallel probes: $parallel"
 $lines += ''
 $lines += '| Variant | Mean | Runs |'
 $lines += '| --- | --- | --- |'
 $lines += "| ``$baselineRef`` (baseline) | ${baselineMean}s | $($baselineTimes -join ' ') |"
 $lines += "| this branch | ${branchMean}s | $($branchTimes -join ' ') |"
 $lines += ''
-$lines += "CLI before: ``$versionBefore`` · after: ``$versionAfter``"
+$lines += "CLI before: ``$versionBefore`` - after: ``$versionAfter``"
 if ($versionBefore -ne $versionAfter) {
     $lines += ''
-    $lines += '> **The CLI updated itself mid-run — these timings are not comparable.**'
+    $lines += '> **The CLI updated itself mid-run -- these timings are not comparable.**'
 }
 
 $lines | ForEach-Object { Write-Host $_ }
