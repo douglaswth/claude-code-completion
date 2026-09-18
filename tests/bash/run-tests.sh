@@ -31,6 +31,16 @@ install_bashunit() {
     staging="$(mktemp -d)"
     if output="$(curl -fsS https://bashunit.com/install.sh | bash -s -- "$staging" "$want" 2>&1)" \
         && [[ -x "$staging/bashunit" ]]; then
+        # Confirm we got the version we asked for. The installer takes
+        # "<dir> <version>" today, but if that parsing ever changes it could
+        # succeed while quietly ignoring the version - and the daily check
+        # would then find the same mismatch and re-download forever, saying
+        # nothing. Report the discrepancy once rather than loop in silence.
+        local got
+        got="$(grep -m1 -oE 'BASHUNIT_VERSION="[^"]+"' "$staging/bashunit" | cut -d'"' -f2 || true)"
+        if [[ "$want" != "latest" && -n "$got" && "$got" != "$want" ]]; then
+            echo "warning: asked bashunit's installer for $want but it delivered ${got}" >&2
+        fi
         mkdir -p "$PROJECT_ROOT/lib"
         mv "$staging/bashunit" "$BASHUNIT"
         rm -rf "$staging"
