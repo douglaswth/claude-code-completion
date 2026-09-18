@@ -18,6 +18,12 @@ git show "${BASELINE_REF}:claude.bash" > "$baseline_script"
 cores="$(source ./claude.bash >/dev/null 2>&1; _claude_cpu_count)"
 concurrency="$(source ./claude.bash >/dev/null 2>&1; _claude_probe_concurrency)"
 
+# Settle the auto-updater before timing anything. A native install updates
+# itself when invoked, and a cache build invokes it ~38 times, so a pending
+# update must land here rather than inside a timed run. There is no documented
+# way to disable it in user scope.
+claude --help >/dev/null 2>&1 || true
+
 version_before="$(claude --version 2>/dev/null | head -1)"
 
 run_build() {

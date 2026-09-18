@@ -68,13 +68,6 @@ jobs:
           irm https://claude.ai/install.ps1 | iex
           "$HOME\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
-      - name: Report machine and settle the auto-updater
-        shell: ${{ matrix.shell }}
-        run: |
-          claude --version
-          claude --help > /dev/null 2>&1 || true
-          claude --version
-
       - name: Benchmark
         shell: ${{ matrix.shell }}
         run: ${{ matrix.shell == 'bash' && './tests/bench/bench.sh' || './tests/bench/bench.ps1' }}

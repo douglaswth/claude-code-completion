@@ -37,6 +37,12 @@ $cores = [Environment]::ProcessorCount
 $concurrency = _ClaudeProbeConcurrency
 $parallel = _ClaudeCanProbeInParallel
 
+# Settle the auto-updater before timing anything. A native install updates
+# itself when invoked, and a cache build invokes it ~38 times, so a pending
+# update must land here rather than inside a timed run. There is no documented
+# way to disable it in user scope.
+claude --help *> $null
+
 $versionBefore = (claude --version 2>$null | Select-Object -First 1)
 
 function Invoke-TimedBuild {
