@@ -118,6 +118,16 @@ exists in no version still parses with zero errors. What does break 5.1 at
 parse time is PowerShell 7-only *syntax* in any branch, live or dead.
 **`claude.ps1` therefore admits no `??`, `?:`, or `&&`/`||` pipeline chains.**
 
+Encoding is a second, independent way to break 5.1 at parse time, and it cost
+a CI round to find. 5.1 decodes a BOM-less `.ps1` as ANSI, so a UTF-8 em dash
+(`E2 80 94`) arrives as cp1252 `â€”` - and `0x94` there is a smart closing
+quote, which PowerShell honours as a string delimiter. A dash inside a string
+literal ends the string mid-line and the rest of the file parses as nonsense.
+`claude.ps1` had survived only by placement, its non-ASCII sitting in comments
+where a mangled character is still a comment. **The PowerShell sources this
+branch owns are therefore kept ASCII-only.** Neither trap is visible to a
+PowerShell 7 parse check; only the 5.1 CI job catches them.
+
 ### Resolution
 
 The resolver walks the words left to right, extending the current path while
@@ -153,41 +163,43 @@ claude plugin eval <TAB>                -> init
 ### Build cost, measured
 
 Design-time estimate was that parallelism would drop the cold build from ~5s
-to ~1-2s. **That was wrong**, and the measured figures are these (2-core
-machine, CLI 2.1.275, mean of two runs):
+to ~1-2s. The first measurement, on a two-core machine, said the opposite -
+~0.9s *slower*. Both were wrong to generalise from, because the answer depends
+on core count. CI measures it across runners (`.github/workflows/bench.yml`,
+`origin/main` against the branch, three interleaved repetitions each):
 
-| Build                                         | Probes | Time  |
-| --------------------------------------------- | ------ | ----- |
-| Before this change (2 levels, serial)          | 19     | 4.8s  |
-| This change, pruned + parallel                 | 38     | 5.4s  |
-| This change, pruned, serial                    | 38     | 8.1s  |
-| This change, parallel, **no** pruning          | 55     | 9.3s  |
+| Runner | Cores | Concurrency | Probe path | `origin/main` | This branch |
+| ------ | ----- | ----------- | ---------- | ------------- | ----------- |
+| ubuntu-latest, bash      | 4 | 8 | parallel | 2.93s | **2.83s** |
+| macos-latest, bash       | 3 | 6 | parallel | 2.35s | **1.95s** |
+| windows-latest, pwsh 7.6 | 4 | 8 | parallel | 4.19s | **4.26s** |
+| windows-latest, PS 5.1   | 4 | 8 | serial   | 4.69s | **8.11s** |
+| dev machine, bash        | 2 | 4 | parallel | ~5.1s | ~6.0s     |
 
-So the cold build gets roughly **0.6s slower**, once per CLI version, not
-faster. `claude --help` is a CPU-bound Node cold start (0.21s in isolation),
-so on two cores eight concurrent probes finish in 1.15s against 1.70s serial
-— about 1.5x, nowhere near 8x. Doubling the probe count outruns that.
+**On every machine with more than two cores the new build is break-even or
+faster**, despite probing 38 nodes where the old one probed 19. The two-core
+development machine is the outlier: `claude --help` is a CPU-bound Node cold
+start, so two cores cap the parallel gain at about 1.5x and the doubled probe
+count outruns it.
 
-Both optimizations still pay for themselves: without them the same tree would
-cost 9.3s, so pruning and parallelism together turn a +4.5s regression into
-+0.6s. The speedup is core-count dependent and should be larger on wider
-machines, but that has not been measured and is not claimed here.
+The 55-probe unpruned variant measured 9.3s against 5.4s pruned on the
+two-core machine, so pruning is carrying real weight there regardless.
 
-Concurrency is derived from the core count rather than fixed, as
-`cores * 2` clamped to `[2, 16]`. The multiplier follows the measurement: on
-two cores, 4 and 8 tie at ~5.7s while 16 and 24 get *slower* (6.5s, 6.2s) from
-oversubscription. The clamp bounds both extremes — a single-core container must
-not launch eight Node processes, and a very wide machine must not launch dozens,
-since each probe costs real memory.
+### The parallel probe path earns its keep
 
-Core detection mirrors the guarded-probe pattern `_claude_mtime` already uses
-for its GNU/BSD `stat` split: bash tries `nproc`, then `sysctl -n hw.ncpu`,
-then `getconf _NPROCESSORS_ONLN`, then `$NUMBER_OF_PROCESSORS`, range-checking
-each result. `nproc` goes first because it honours CPU affinity — a cgroup- or
-`taskset`-limited container reports the budget it actually has, which was
-verified (`taskset -c 0 nproc` → `1`). PowerShell uses
-`[Environment]::ProcessorCount`, which works on 5.1 and 7+ across platforms and
-honours container CPU limits.
+The last two rows above are the same machine with the same four cores running
+the same branch code, differing only in whether probes run in parallel:
+**4.26s against 8.11s**, a 1.9x gain. On two cores the same comparison gave
+only 1.2x, which had made the parallel path look barely worth its complexity.
+
+The two PowerShell engines are not confounding that. On the *baseline* they
+differ by 0.5s (4.19s against 4.69s, ~12%); on the branch they differ by 3.85s
+(~90%). The engine accounts for a small fraction and the probe path for the
+rest.
+
+Windows PowerShell 5.1 therefore pays ~3.4s more than the old build, being the
+one configuration with no parallel option. That is the cost of the feature on
+5.1, once per CLI version.
 
 ### A zero core count is reachable
 
