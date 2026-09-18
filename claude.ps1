@@ -20,12 +20,12 @@ $script:ClaudeMaxDepth = 6
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Each entry has fields: Scope, Name, TakesArg, ArgType, Description
-#   Scope       -- '_root' or a subcommand name (mcp, plugin, agents, ...)
-#   Name        -- flag form (e.g. --foo). Short forms are separate entries.
-#   TakesArg    -- 'none' | 'required' | 'optional'
+#   Scope       — '_root' or a subcommand name (mcp, plugin, agents, …)
+#   Name        — flag form (e.g. --foo). Short forms are separate entries.
+#   TakesArg    — 'none' | 'required' | 'optional'
 #                 (required = <value>; optional = [value], may be omitted)
-#   ArgType     -- 'none' | 'file' | 'dir' | 'choice:a,b,c' | 'unknown'
-#   Description -- short text
+#   ArgType     — 'none' | 'file' | 'dir' | 'choice:a,b,c' | 'unknown'
+#   Description — short text
 $script:ClaudeExtraFlags = @(
     [pscustomobject]@{ Scope='_root'; Name='--background'; TakesArg='none'; ArgType='none'; Description='Run the session in the background' }
     [pscustomobject]@{ Scope='_root'; Name='--bg'; TakesArg='none'; ArgType='none'; Description='Run the session in the background' }
@@ -125,7 +125,7 @@ function global:_ClaudeProbeConcurrency {
     # core exactly as it does in claude.bash instead of silently re-detecting.
     param([int]$Cores = -1)
     if ($Cores -lt 0) { $Cores = [Environment]::ProcessorCount }
-    # Clamp the core count, not the result -- mirrors _claude_probe_concurrency.
+    # Clamp the core count, not the result — mirrors _claude_probe_concurrency.
     if ($Cores -lt 1) { $Cores = 1 }
     $concurrency = $Cores * 2
     if ($concurrency -gt 16) { $concurrency = 16 }
@@ -161,8 +161,8 @@ function global:_ClaudeNodeIsProbeable {
     # command group, and so is worth spending a `--help` probe on.
     #
     # Two classes never can be:
-    #   help        -- Commander's built-in help command is always a leaf
-    #   foo <arg>   -- a required argument placeholder means the node consumes
+    #   help        — Commander's built-in help command is always a leaf
+    #   foo <arg>   — a required argument placeholder means the node consumes
     #                 a value, not a subcommand
     #
     # -Term must be the TERM COLUMN, never the whole help row: descriptions
@@ -182,8 +182,8 @@ function global:_ClaudeNodeIsProbeable {
 function global:_ClaudeCanProbeInParallel {
     # ForEach-Object -Parallel is PowerShell 7+, and each iteration runs in a
     # fresh runspace that inherits neither this script's functions nor the
-    # session's aliases. A `claude` that is not a plain external executable --
-    # a wrapper function, or a test mock -- would therefore resolve to
+    # session's aliases. A `claude` that is not a plain external executable —
+    # a wrapper function, or a test mock — would therefore resolve to
     # something else or to nothing at all inside the parallel block, so those
     # sessions probe serially instead. Both paths write identical files.
     if ($PSVersionTable.PSVersion.Major -lt 7) { return $false }
@@ -206,7 +206,7 @@ function global:_ClaudeParseNode {
 function global:_ClaudeBuildCache {
     $cacheDir = _ClaudeCacheDir
     # Build into a private staging dir, then publish atomically with a
-    # rename. The real version dir therefore only ever exists fully built --
+    # rename. The real version dir therefore only ever exists fully built —
     # a crashed or interrupted build can never leave a partial/empty cache
     # that later reads would mistake for complete.
     $buildDir = "$cacheDir.tmp.$PID"
@@ -228,7 +228,7 @@ function global:_ClaudeBuildCache {
     #
     # Only the fetch is parallel. Parsing stays serial and in-process because
     # -Parallel runs each iteration in a runspace that cannot see these
-    # functions, and both shells must produce identical caches -- see
+    # functions, and both shells must produce identical caches — see
     # docs/plans/2026-09-17-nested-subcommand-completion.md.
     #
     # Cache keys are the command path joined by '_' (plugin_marketplace_flags).
@@ -326,7 +326,7 @@ function global:_ClaudeParseFlags {
 function global:_ClaudeParseFlagsWithArgs {
     # Flags that take an argument (required <value> or optional [value]). The
     # placeholder follows the flag after a SINGLE space; a 2+ space gap instead
-    # introduces the description (e.g. "--mcp-debug   [DEPRECATED...]"), which must
+    # introduces the description (e.g. "--mcp-debug   [DEPRECATED…]"), which must
     # not be mistaken for an argument.
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
@@ -340,7 +340,7 @@ function global:_ClaudeParseFlagsWithArgs {
 }
 
 function global:_ClaudeParseFlagsWithOptionalArgs {
-    # Flags whose argument is OPTIONAL -- shown as [value], not <value>. Same
+    # Flags whose argument is OPTIONAL — shown as [value], not <value>. Same
     # single-space rule as _ClaudeParseFlagsWithArgs so a description beginning
     # with '[' is not mistaken for an optional argument.
     param([string[]]$HelpLines)
@@ -600,8 +600,8 @@ function global:_ClaudeResolveSymlinks {
 
 function global:_ClaudeEncodedCwd {
     # Encodes CWD to match Claude CLI's project directory naming.
-    # Windows: C:\Users\foo -> C--Users-foo (colon and backslashes become dashes)
-    # Unix: /home/foo -> -home-foo (slashes become dashes; colons preserved)
+    # Windows: C:\Users\foo → C--Users-foo (colon and backslashes become dashes)
+    # Unix: /home/foo → -home-foo (slashes become dashes; colons preserved)
     if ($PSVersionTable.PSVersion.Major -le 5 -or $IsWindows) {
         $pwd.Path -replace '[:\\/]', '-'
     } else {
@@ -755,7 +755,7 @@ function global:_ClaudeComplete {
     # far. Elements that match nothing are skipped rather than ending the walk,
     # so a flag's argument ("claude mcp --scope user get") cannot hide the
     # subcommand that follows it.
-    # The word being completed is excluded -- matches bash behavior (i < cword).
+    # The word being completed is excluded — matches bash behavior (i < cword).
     $key = '_root'
     $cmdPath = @()
     $loopLimit = if ($WordToComplete -ne '') { $Elements.Count - 1 } else { $Elements.Count }
@@ -787,7 +787,7 @@ function global:_ClaudeComplete {
         $optionalArgsFile = Join-Path $cacheDir "${key}_flags_with_optional_args"
         if ((Test-Path $flagsWithArgsFile) -and ((Get-Content $flagsWithArgsFile) -contains $prev)) {
             # For optional-arg flags, a current word that already starts with '-'
-            # means the user is typing the next flag, not the argument -- fall
+            # means the user is typing the next flag, not the argument — fall
             # through to normal flag/subcommand completion. Otherwise (empty or
             # non-dash word) complete the flag's argument.
             $isOptional = (Test-Path $optionalArgsFile) -and ((Get-Content $optionalArgsFile) -contains $prev)

@@ -1,6 +1,6 @@
 # Nesting beyond two levels: the command tree is walked to whatever depth
 # `claude --help` actually describes, rather than a fixed subcmd/sub-subcmd
-# pair. Mirrors tests/bash/nested_subcommands_test.bash -- the two shells must
+# pair. Mirrors tests/bash/nested_subcommands_test.bash — the two shells must
 # behave identically here.
 
 BeforeAll {
@@ -218,7 +218,7 @@ Describe 'Probe concurrency' {
 
     It 'clamps a zero core count' {
         # NUMBER_OF_PROCESSORS is an ordinary environment variable that
-        # detection only checks for digits, so 0 can reach here -- and an
+        # detection only checks for digits, so 0 can reach here — and an
         # unclamped 0 divides by zero in the bash build loop's throttle.
         _ClaudeProbeConcurrency -Cores 0 | Should -Be 2
     }

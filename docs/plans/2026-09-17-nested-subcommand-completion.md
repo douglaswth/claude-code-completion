@@ -123,10 +123,13 @@ a CI round to find. 5.1 decodes a BOM-less `.ps1` as ANSI, so a UTF-8 em dash
 (`E2 80 94`) arrives as cp1252 `â€”` - and `0x94` there is a smart closing
 quote, which PowerShell honours as a string delimiter. A dash inside a string
 literal ends the string mid-line and the rest of the file parses as nonsense.
-`claude.ps1` had survived only by placement, its non-ASCII sitting in comments
-where a mangled character is still a comment. **The PowerShell sources this
-branch owns are therefore kept ASCII-only.** Neither trap is visible to a
-PowerShell 7 parse check; only the 5.1 CI job catches them.
+`claude.ps1` is unaffected: its non-ASCII sits in comments, where a mangled
+character is still a comment, and it has always parsed cleanly on 5.1. **The
+rule is therefore about string literals, not the file as a whole** - a
+`.ps1` that 5.1 must parse may not carry non-ASCII inside a string unless it
+also carries a UTF-8 BOM, which a file with a `#!` shebang cannot. Neither this
+nor the PowerShell 7 syntax rule is visible to a PowerShell 7 parse check; only
+the 5.1 CI job catches them.
 
 ### Resolution
 
@@ -165,8 +168,10 @@ claude plugin eval <TAB>                -> init
 Design-time estimate was that parallelism would drop the cold build from ~5s
 to ~1-2s. The first measurement, on a two-core machine, said the opposite -
 ~0.9s *slower*. Both were wrong to generalise from, because the answer depends
-on core count. CI measures it across runners (`.github/workflows/bench.yml`,
-`origin/main` against the branch, three interleaved repetitions each):
+on core count. A temporary `workflow_dispatch` benchmark measured it across CI
+runners - `origin/main` against the branch, three interleaved repetitions each,
+with the CLI version asserted unchanged either side of the timed section. The
+harness was removed once it had answered the question; these are its numbers:
 
 | Runner | Cores | Concurrency | Probe path | `origin/main` | This branch |
 | ------ | ----- | ----------- | ---------- | ------------- | ----------- |
