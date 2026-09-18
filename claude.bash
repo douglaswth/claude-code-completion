@@ -16,7 +16,7 @@ fi
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-_CLAUDE_CACHE_VERSION=9
+_CLAUDE_CACHE_VERSION=10
 
 # Maximum concurrent `claude ... --help` probes during a cache build. Each is
 # a Node cold start, so the per-level fan-out is batched rather than unbounded.
@@ -28,7 +28,7 @@ _CLAUDE_PROBE_CONCURRENCY="${_CLAUDE_PROBE_CONCURRENCY:-}"
 # it exists so a pathological help output can never spin the build forever.
 _CLAUDE_MAX_DEPTH=6
 
-# Bundled flags last extended through CHANGELOG version: 2.1.220
+# Bundled flags last extended through CHANGELOG version: 2.1.276
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Format: scope<TAB>name<TAB>takes_arg<TAB>arg_type<TAB>description
@@ -39,6 +39,9 @@ _CLAUDE_MAX_DEPTH=6
 #   arg_type  — none | file | dir | choice:a,b,c | unknown
 #   description — short text; no embedded tabs
 _CLAUDE_EXTRA_FLAGS=(
+    $'_root\t--append-subagent-system-prompt\trequired\tunknown\tText appended to the subagent system prompt'
+    $'_root\t--append-subagent-system-prompt-file\trequired\tfile\tRead the subagent system prompt from a file'
+    $'_root\t--append-system-prompt-file\trequired\tfile\tRead text appended to the system prompt from a file'
     $'_root\t--background\tnone\tnone\tRun the session in the background'
     $'_root\t--bg\tnone\tnone\tRun the session in the background'
     $'_root\t--capacity\trequired\tunknown\tMax concurrent sessions for --remote-control'
@@ -61,9 +64,26 @@ _CLAUDE_EXTRA_FLAGS=(
     $'_root\t--rewind-files\trequired\tunknown\tRewind files to a given message ID (requires --resume)'
     $'_root\t--session-mirror\tnone\tnone\tMirror local sessions to claude.ai as view-only'
     $'_root\t--spawn\trequired\tchoice:same-dir,worktree,session\tSpawn mode for --remote-control sessions'
+    $'_root\t--system-prompt-file\trequired\tfile\tRead the system prompt from a file'
     $'_root\t--teleport\toptional\tunknown\tResume a teleport session, optionally specify session ID'
     $'_root\t--thinking\trequired\tchoice:enabled,adaptive,disabled\tThinking mode: enabled (adaptive) or disabled'
     $'_root\t--thinking-display\trequired\tunknown\tControl how thinking content is displayed'
+)
+
+# Subcommands the CLI implements but omits from the "Commands:" section of
+# `claude --help`. The walk can only learn command names from that section, so
+# without this the node is never probed, none of its flags are cached, and
+# nothing about it can be completed. Bundling its *flags* instead would be
+# inert: the merge below skips any scope that was never probed.
+#
+# Names are added optimistically, exactly as bundled flags are. If one ever
+# disappears upstream, its probe returns nothing and no cache files are
+# written, so only the bare name is offered - the same trade the flag list
+# already makes for older installs.
+#
+# Format: name<TAB>description
+_CLAUDE_EXTRA_SUBCOMMANDS=(
+    $'self-hosted-runner\tRun a self-hosted Claude Code runner'
 )
 
 # Split a tab-separated extra-flag record into its fields.
@@ -320,53 +340,16 @@ _claude_parse_subcommand_descriptions() {
     done
 }
 
-_claude_parse_subcommand_terms() {
-    # Emit "<name><TAB><term column>" for each command row in the "Commands:"
-    # section of help output on stdin. The term column is the text before the
-    # first 2+ space gap, i.e. the name plus its argument placeholders with
-    # the description stripped off. Same row anchoring as
-    # _claude_parse_subcommands.
-    local in_commands=0
-    local line
-    while IFS= read -r line; do
-        if [[ "$line" =~ ^Commands: ]]; then
-            in_commands=1
-            continue
-        fi
-        if [[ $in_commands -eq 1 ]]; then
-            [[ -z "$line" ]] && continue
-            [[ ! "$line" =~ ^[[:space:]] ]] && break
-            local cmd_re='^  ([a-zA-Z][-a-zA-Z]*).*  +[^[:space:]]'
-            if [[ "$line" =~ $cmd_re ]]; then
-                local term="${line#  }"
-                term="${term%%  *}"
-                printf '%s\t%s\n' "${BASH_REMATCH[1]}" "$term"
-            fi
-        fi
-    done
-}
-
 _claude_node_is_probeable() {
-    # Decide whether a node listed in a "Commands:" section could itself be a
-    # command group, and so is worth spending a `--help` probe on.
-    # Usage: _claude_node_is_probeable <name> <term column>
+    # Decide whether a node listed in a "Commands:" section is worth spending a
+    # `--help` probe on. Every node is, except Commander's built-in help
+    # command, which is always a leaf and whose only flag is --help itself.
     #
-    # Two classes never can be:
-    #   help        — Commander's built-in help command is always a leaf
-    #   foo <arg>   — a required argument placeholder means the node consumes
-    #                 a value, not a subcommand
-    #
-    # $2 must be the TERM COLUMN, never the whole help row: descriptions carry
-    # angle brackets of their own (claude plugin eval's mentions
-    # "<eval dir>/**/case.yaml"), and matching those would misclassify a real
-    # command group as a leaf and silently drop its completions.
-    #
-    # The required-<arg> rule is a Commander convention rather than a
-    # guarantee, so tests/bash/prune_guard_test.bash re-checks it against the
-    # installed CLI and fails if upstream ever violates it.
-    local name="$1" term="$2"
+    # Every other node is probed even when it cannot be a command group,
+    # because its help still carries the flags *it* accepts. Skipping those
+    # left `claude plugin install -<TAB>` with nothing to offer.
+    local name="$1"
     [[ "$name" == "help" ]] && return 1
-    [[ "$term" == *"<"* ]] && return 1
     return 0
 }
 
@@ -427,9 +410,9 @@ _claude_build_cache() {
             # keeps stray empty cache files from looking like real answers.
             [[ -s "$raw" ]] || continue
             _claude_parse_node "$build_dir" "$key" "$raw"
-            while IFS=$'\t' read -r name term; do
+            while IFS= read -r name; do
                 [[ -z "$name" ]] && continue
-                _claude_node_is_probeable "$name" "$term" || continue
+                _claude_node_is_probeable "$name" || continue
                 if [[ "$key" == "_root" ]]; then
                     child_key="$name"
                 else
@@ -437,7 +420,23 @@ _claude_build_cache() {
                 fi
                 next_keys+=("$child_key")
                 next_paths+=("${path:+$path }$name")
-            done < <(_claude_parse_subcommand_terms < "$raw")
+            done < <(_claude_parse_subcommands < "$raw")
+
+            # Hidden subcommands are children of the root and of nothing else.
+            if [[ "$key" == "_root" ]]; then
+                local sub_rec sub_name sub_desc
+                for sub_rec in "${_CLAUDE_EXTRA_SUBCOMMANDS[@]}"; do
+                    [[ -z "$sub_rec" ]] && continue
+                    IFS=$'\t' read -r sub_name sub_desc <<< "$sub_rec"
+                    # --help wins on overlap, as it does for bundled flags.
+                    grep -qx -- "$sub_name" "$build_dir/_root_subcommands" && continue
+                    echo "$sub_name" >> "$build_dir/_root_subcommands"
+                    printf '%s\t%s\n' "$sub_name" "$sub_desc" \
+                        >> "$build_dir/_root_subcommand_descriptions"
+                    next_keys+=("$sub_name")
+                    next_paths+=("$sub_name")
+                done
+            fi
         done
 
         level=()

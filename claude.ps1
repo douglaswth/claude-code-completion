@@ -4,7 +4,7 @@
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-$script:ClaudeCacheVersion = 9
+$script:ClaudeCacheVersion = 10
 
 # Maximum concurrent `claude ... --help` probes during a cache build. Each is
 # a Node cold start, so the per-level fan-out is batched rather than unbounded.
@@ -16,7 +16,7 @@ $script:ClaudeProbeConcurrency = $null
 # it exists so a pathological help output can never spin the build forever.
 $script:ClaudeMaxDepth = 6
 
-# Bundled flags last extended through CHANGELOG version: 2.1.220
+# Bundled flags last extended through CHANGELOG version: 2.1.276
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Each entry has fields: Scope, Name, TakesArg, ArgType, Description
@@ -26,7 +26,24 @@ $script:ClaudeMaxDepth = 6
 #                 (required = <value>; optional = [value], may be omitted)
 #   ArgType     — 'none' | 'file' | 'dir' | 'choice:a,b,c' | 'unknown'
 #   Description — short text
+# Subcommands the CLI implements but omits from the "Commands:" section of
+# `claude --help`. The walk can only learn command names from that section, so
+# without this the node is never probed, none of its flags are cached, and
+# nothing about it can be completed. Bundling its *flags* instead would be
+# inert: the merge skips any scope that was never probed.
+#
+# Names are added optimistically, exactly as bundled flags are. If one ever
+# disappears upstream, its probe returns nothing and no cache files are
+# written, so only the bare name is offered.
+# Keep this list and _CLAUDE_EXTRA_SUBCOMMANDS in claude.bash in sync.
+$script:ClaudeExtraSubcommands = @(
+    [pscustomobject]@{ Name='self-hosted-runner'; Description='Run a self-hosted Claude Code runner' }
+)
+
 $script:ClaudeExtraFlags = @(
+    [pscustomobject]@{ Scope='_root'; Name='--append-subagent-system-prompt'; TakesArg='required'; ArgType='unknown'; Description='Text appended to the subagent system prompt' }
+    [pscustomobject]@{ Scope='_root'; Name='--append-subagent-system-prompt-file'; TakesArg='required'; ArgType='file'; Description='Read the subagent system prompt from a file' }
+    [pscustomobject]@{ Scope='_root'; Name='--append-system-prompt-file'; TakesArg='required'; ArgType='file'; Description='Read text appended to the system prompt from a file' }
     [pscustomobject]@{ Scope='_root'; Name='--background'; TakesArg='none'; ArgType='none'; Description='Run the session in the background' }
     [pscustomobject]@{ Scope='_root'; Name='--bg'; TakesArg='none'; ArgType='none'; Description='Run the session in the background' }
     [pscustomobject]@{ Scope='_root'; Name='--capacity'; TakesArg='required'; ArgType='unknown'; Description='Max concurrent sessions for --remote-control' }
@@ -49,6 +66,7 @@ $script:ClaudeExtraFlags = @(
     [pscustomobject]@{ Scope='_root'; Name='--rewind-files'; TakesArg='required'; ArgType='unknown'; Description='Rewind files to a given message ID (requires --resume)' }
     [pscustomobject]@{ Scope='_root'; Name='--session-mirror'; TakesArg='none'; ArgType='none'; Description='Mirror local sessions to claude.ai as view-only' }
     [pscustomobject]@{ Scope='_root'; Name='--spawn'; TakesArg='required'; ArgType='choice:same-dir,worktree,session'; Description='Spawn mode for --remote-control sessions' }
+    [pscustomobject]@{ Scope='_root'; Name='--system-prompt-file'; TakesArg='required'; ArgType='file'; Description='Read the system prompt from a file' }
     [pscustomobject]@{ Scope='_root'; Name='--teleport'; TakesArg='optional'; ArgType='unknown'; Description='Resume a teleport session, optionally specify session ID' }
     [pscustomobject]@{ Scope='_root'; Name='--thinking'; TakesArg='required'; ArgType='choice:enabled,adaptive,disabled'; Description='Thinking mode: enabled (adaptive) or disabled' }
     [pscustomobject]@{ Scope='_root'; Name='--thinking-display'; TakesArg='required'; ArgType='unknown'; Description='Control how thinking content is displayed' }
@@ -132,50 +150,17 @@ function global:_ClaudeProbeConcurrency {
     return $concurrency
 }
 
-function global:_ClaudeParseSubcommandTerms {
-    # Emit "<name><TAB><term column>" for each command row in the "Commands:"
-    # section. The term column is the text before the first 2+ space gap, i.e.
-    # the name plus its argument placeholders with the description stripped
-    # off. Same row anchoring as _ClaudeParseSubcommands.
-    param([string[]]$HelpLines)
-    $inCommands = $false
-    foreach ($line in $HelpLines) {
-        if ($line -match '^Commands:') {
-            $inCommands = $true
-            continue
-        }
-        if ($inCommands) {
-            if ([string]::IsNullOrEmpty($line)) { continue }
-            if ($line -notmatch '^\s') { break }
-            if ($line -match '^  ([a-zA-Z][-a-zA-Z]*).*  +\S') {
-                $name = $Matches[1]
-                $term = ($line -replace '^  ', '') -split '  ', 2
-                "$name`t$($term[0])"
-            }
-        }
-    }
-}
-
 function global:_ClaudeNodeIsProbeable {
-    # Decide whether a node listed in a "Commands:" section could itself be a
-    # command group, and so is worth spending a `--help` probe on.
+    # Decide whether a node listed in a "Commands:" section is worth spending a
+    # `--help` probe on. Every node is, except Commander's built-in help
+    # command, which is always a leaf and whose only flag is --help itself.
     #
-    # Two classes never can be:
-    #   help        — Commander's built-in help command is always a leaf
-    #   foo <arg>   — a required argument placeholder means the node consumes
-    #                 a value, not a subcommand
-    #
-    # -Term must be the TERM COLUMN, never the whole help row: descriptions
-    # carry angle brackets of their own (claude plugin eval's mentions
-    # "<eval dir>/**/case.yaml"), and matching those would misclassify a real
-    # command group as a leaf and silently drop its completions.
-    #
-    # The required-<arg> rule is a Commander convention rather than a
-    # guarantee, so tests/bash/prune_guard_test.bash re-checks it against the
-    # installed CLI and fails if upstream ever violates it.
-    param([string]$Name, [string]$Term)
+    # Every other node is probed even when it cannot be a command group,
+    # because its help still carries the flags *it* accepts. Skipping those
+    # left `claude plugin install -<TAB>` with nothing to offer.
+    # Mirrors _claude_node_is_probeable in claude.bash.
+    param([string]$Name)
     if ($Name -eq 'help') { return $false }
-    if ($Term -like '*<*') { return $false }
     return $true
 }
 
@@ -252,14 +237,27 @@ function global:_ClaudeBuildCache {
             if ((Get-Item $rawFile).Length -eq 0) { continue }
             $helpLines = @(Get-Content $rawFile)
             _ClaudeParseNode -BuildDir $buildDir -Key $node.Key -HelpLines $helpLines
-            foreach ($row in @(_ClaudeParseSubcommandTerms -HelpLines $helpLines)) {
-                $parts = $row -split "`t", 2
-                if ($parts.Count -ne 2) { continue }
-                $name = $parts[0]
-                if (-not (_ClaudeNodeIsProbeable -Name $name -Term $parts[1])) { continue }
+            foreach ($name in @(_ClaudeParseSubcommands -HelpLines $helpLines)) {
+                if ([string]::IsNullOrWhiteSpace($name)) { continue }
+                if (-not (_ClaudeNodeIsProbeable -Name $name)) { continue }
                 $childKey = if ($node.Key -eq '_root') { $name } else { "$($node.Key)_$name" }
                 $childPath = if ($node.Path) { "$($node.Path) $name" } else { $name }
                 [void]$next.Add([pscustomobject]@{ Key = $childKey; Path = $childPath })
+            }
+
+            # Hidden subcommands are children of the root and of nothing else.
+            if ($node.Key -eq '_root') {
+                $rootSubFile = Join-Path $buildDir '_root_subcommands'
+                foreach ($extra in $script:ClaudeExtraSubcommands) {
+                    if (-not $extra) { continue }
+                    $known = @(Get-Content $rootSubFile -ErrorAction SilentlyContinue)
+                    # --help wins on overlap, as it does for bundled flags.
+                    if ($known -contains $extra.Name) { continue }
+                    Add-Content -Path $rootSubFile -Value $extra.Name
+                    Add-Content -Path (Join-Path $buildDir '_root_subcommand_descriptions') `
+                        -Value "$($extra.Name)`t$($extra.Description)"
+                    [void]$next.Add([pscustomobject]@{ Key = $extra.Name; Path = $extra.Name })
+                }
             }
         }
 

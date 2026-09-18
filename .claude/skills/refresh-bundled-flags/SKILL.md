@@ -5,7 +5,10 @@ description: Use when refreshing the inline bundled-flag list in claude.bash and
 
 # Refresh Bundled Flags
 
-Use this skill to maintain the inline bundled-flag list in `claude.bash` and `claude.ps1` — flags the completion offers in addition to whatever it parses live from `claude --help` at completion time.
+Use this skill to maintain the inline bundled lists in `claude.bash` and `claude.ps1` — things the completion offers in addition to whatever it parses live from `claude --help` at completion time. There are two:
+
+- **`_CLAUDE_EXTRA_FLAGS` / `$script:ClaudeExtraFlags`** — flags.
+- **`_CLAUDE_EXTRA_SUBCOMMANDS` / `$script:ClaudeExtraSubcommands`** — subcommands the CLI implements but omits from the `Commands:` section of `claude --help`. See **Hidden subcommands** below; a hidden subcommand's flags cannot be bundled without its name, because the merge skips any scope that was never probed.
 
 ## Why this list exists (read first)
 
@@ -52,7 +55,21 @@ The list can't carry every flag that ever existed. The practical horizon is "fla
    - **Functional but absent from `--help`** in some fielded version (the `--bg` pattern — the flag works but isn't listed) → bundle it and its aliases so those installs still complete it.
    - Existing bundled entries are almost all flags hidden from the current `--help` (`--spawn`, `--channels`, `--session-mirror`, …). A candidate that *does* show up in the current `--help` is a strong signal it does **not** need bundling — check before adding.
 
-6. **Classify each new candidate.** Determine the five fields:
+6. **Probe the siblings of every hidden flag you find.** The CHANGELOG is not a reliable index of what is hidden: it announces flags, not their visibility, and it says nothing at all about flags that were never announced or that predate the baseline. When a candidate turns out to be functional-but-hidden, immediately check the rest of its family — the same stem with and without `-file`, singular and `subagent` forms, and any inline/file pairing:
+
+   ```
+   for f in --system-prompt-file --append-system-prompt-file \
+            --append-subagent-system-prompt --append-subagent-system-prompt-file; do
+       claude --help | grep -- "$f"            # visible?
+       claude "$f" /nonexistent -p hi          # functional? ("not found" = yes,
+   done                                        #   "unknown option" = no)
+   ```
+
+   In the 2.1.276 refresh this found three flags the changelog sweep could not: `--append-subagent-system-prompt` (never announced), `--append-system-prompt-file` (2.1.69) and `--system-prompt-file` (1.0.55) — all hidden, all functional, none bundled. Their *inline* counterparts `--system-prompt` and `--append-system-prompt` are in `--help`, which is exactly what makes the gap easy to miss.
+
+   Use a value that will fail fast. A probe like `--append-subagent-system-prompt foo -p hi` consumes its argument and then runs a real session, which costs an API call.
+
+7. **Classify each new candidate.** Determine the five fields:
    - `scope` — `_root` or subcommand name
    - `name` — `--foo` (one entry per form; short forms are separate entries with the same metadata)
    - `takes_arg` — `none`, `required`, or `optional`. Determine from the placeholder syntax in the CHANGELOG / secondary `--help`:
@@ -63,15 +80,32 @@ The list can't carry every flag that ever existed. The practical horizon is "fla
    - `arg_type` — `none`, `file`, `dir`, `choice:a,b,c`, or `unknown`
    - `description` — short string trimmed from the CHANGELOG entry; no embedded tabs
 
-7. **Show diff to user.** Group additions by scope. Allow user edits before applying.
+8. **Show diff to user.** Group additions by scope. Allow user edits before applying.
 
-8. **Apply.** In lockstep:
-   - Edit `claude.bash`: insert each new entry into `_CLAUDE_EXTRA_FLAGS` as a `$'scope\tname\ttakes_arg\targ_type\tdescription'` line.
-   - Edit `claude.ps1`: insert each new entry into `$script:ClaudeExtraFlags` as a `[pscustomobject]@{...}` line.
+9. **Apply.** In lockstep:
+   - Edit `claude.bash`: insert each new entry into `_CLAUDE_EXTRA_FLAGS` as a `$'scope\tname\ttakes_arg\targ_type\tdescription'` line, or into `_CLAUDE_EXTRA_SUBCOMMANDS` as a `$'name\tdescription'` line.
+   - Edit `claude.ps1`: insert each new entry into `$script:ClaudeExtraFlags` or `$script:ClaudeExtraSubcommands` as a `[pscustomobject]@{...}` line.
    - Update both marker comments to the highest CHANGELOG version processed.
    - Bump both `_CLAUDE_CACHE_VERSION` (bash) and `$script:ClaudeCacheVersion` (PS) by 1.
    - Run the parity test: `./tests/bash/run-tests.sh tests/bash/parity_test.bash`.
    - Run both shell suites: `./tests/bash/run-tests.sh` and `./tests/powershell/Invoke-Tests.ps1`.
+
+## Hidden subcommands
+
+`claude self-hosted-runner` is real, fully functional and has 39 flags of its own, but it does not appear in the `Commands:` section of `claude --help`. The cache builder learns command names only from that section, so a hidden subcommand is never probed, none of its flags are cached, and nothing about it completes.
+
+**Bundling its flags does not help.** The merge in `_claude_build_cache` skips any scope whose node was never probed:
+
+```bash
+flags_file="$build_dir/${scope}_flags"
+[[ -f "$flags_file" ]] || continue
+```
+
+So the *name* has to be bundled. `_CLAUDE_EXTRA_SUBCOMMANDS` is seeded into `_root_subcommands` before the walk collects its children, after which the node is probed like any other and its flags are parsed and cached by the ordinary machinery — the parsers cope with unusual help layouts (`self-hosted-runner` uses `Connection:` / `Runtime:` / `Debug:` headings rather than `Options:`).
+
+To find candidates, probe a name directly: `claude <name> --help` succeeds for a hidden subcommand and fails for one that does not exist. Note `claude help` is **not** a help command — it runs `help` as a prompt and starts a real session.
+
+Names are added optimistically, as flags are: if one disappears upstream its probe returns nothing, no cache files are written, and only the bare name is offered.
 
 ## Removal Policy (separate opt-in pass)
 
@@ -86,4 +120,5 @@ The default workflow above is **append-only**. Removal is rare and easy to get w
 - Bash entries are tab-separated; descriptions cannot contain literal tabs. Use spaces for any necessary whitespace inside descriptions.
 - PowerShell entries use `[pscustomobject]@{ ... }` with the property names `Scope`, `Name`, `TakesArg`, `ArgType`, `Description`. `TakesArg` is a string (`'none'`/`'required'`/`'optional'`), matching the bash `takes_arg` column — not a boolean.
 - Keep entries grouped by scope; within a scope, sort alphabetically by name for predictable diffs.
+- `_CLAUDE_EXTRA_SUBCOMMANDS` entries are `name<TAB>description`; the PowerShell mirror uses `[pscustomobject]@{ Name=...; Description=... }`. `tests/bash/parity_test.bash` compares both lists across the two shells, and its extraction is scoped per array — the script holds more than one `[pscustomobject]` array, so an unscoped grep mixes them.
 - Do **not** edit `_CLAUDE_KNOWN_MODELS` from this skill — it's a separate list maintained alongside Claude Code model releases.

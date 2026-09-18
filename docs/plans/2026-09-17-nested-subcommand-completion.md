@@ -63,25 +63,37 @@ build-into-staging-then-rename publish is unchanged.
 
 ### Pruning
 
-Probing every node costs one process launch each. Two classes of node cannot
-be command groups and are skipped:
+Probing every node costs one process launch each, but a node's `--help` is the
+only source for the flags *it* accepts, so almost every node has to be probed
+whether or not it can be a command group. Only one class can be skipped:
 
-- **`help`** — Commander's built-in help command is always a leaf.
-- **A node whose term column shows a required `<arg>`** — e.g.
-  `details [options] <name>`, `get <name>`.
+- **`help`** - Commander's built-in help command is always a leaf, and its
+  only flag is `--help` itself.
 
-This cuts the level-2 probes from 36 to 19 against today's CLI, and is most of
-what keeps the build cost in hand (see "Build cost, measured" below).
+An earlier revision of this design also pruned any node whose term column
+showed a required `<arg>`, on the reasoning that such a node cannot be a
+command group. That was true and beside the point: it cannot have
+*subcommands*, but it still has *flags*. Skipping the probe meant
+`plugin_install_flags` was never written, so `claude plugin install -<TAB>`
+offered nothing at all - a regression against the previous two-level
+implementation, which at least fell back to the parent's flags. The flags it
+should have been offering are real:
 
-The term column is the text before the first 2+ space gap; the description
-must not be examined, because descriptions themselves contain angle
-brackets (`plugin eval`'s mentions
-`<eval dir>/**/case.yaml`) and would misclassify a real group as a leaf.
+```
+$ claude plugin install --help
+  --accept-command <sha256>   Accept the marketplace-declared command
+  --config <key=value>        Set a userConfig option
+  --json                      Print one machine-readable result line
+  --registry <url>            For a <package>@npm install
+```
 
-**The required-`<arg>` rule is a Commander convention, not a guarantee.** A
-future `claude foo <bar> baz` would be silently missed. A guard test
-therefore walks every node the heuristic prunes and asserts its `--help` has
-no `Commands:` section, converting that silent gap into a failing check.
+The guard test written to police that heuristic asserted only that pruning
+never discarded a node with a `Commands:` section. It checked command groups,
+which is what the rule was *about*, and never checked flags, which is what the
+rule *cost* - a proxy standing in for the property that actually mattered.
+
+Dropping the rule removes the heuristic, its guard test, and the term-column
+parser that existed to feed it.
 
 ### Parallelism per shell
 
@@ -187,8 +199,13 @@ development machine is the outlier: `claude --help` is a CPU-bound Node cold
 start, so two cores cap the parallel gain at about 1.5x and the doubled probe
 count outruns it.
 
-The 55-probe unpruned variant measured 9.3s against 5.4s pruned on the
-two-core machine, so pruning is carrying real weight there regardless.
+Those figures predate the pruning change described above. Probing every node
+except `help` raises the probe count from 36 to 55 and the two-core build from
+~5.2s to ~8.1s, measured with a counting shim on the real CLI. That is the
+price of having each node's own flags available; the alternative was a leaf
+that offered nothing, or one that offered its parent's flags. The cost on
+wider machines was not re-measured, the benchmark harness having been removed
+once it had answered its original question.
 
 ### The parallel probe path earns its keep
 
