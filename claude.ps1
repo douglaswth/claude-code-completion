@@ -4,7 +4,17 @@
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-$script:ClaudeCacheVersion = 8
+$script:ClaudeCacheVersion = 9
+
+# Maximum concurrent `claude ... --help` probes during a cache build. Each is
+# a Node cold start, so the per-level fan-out is batched rather than unbounded.
+# Left null so it is derived from the core count per build by
+# _ClaudeProbeConcurrency; set it to pin a value (the test suite does).
+$script:ClaudeProbeConcurrency = $null
+
+# Safety valve on the command-tree walk. Nothing in the CLI approaches this;
+# it exists so a pathological help output can never spin the build forever.
+$script:ClaudeMaxDepth = 6
 
 # Bundled flags last extended through CHANGELOG version: 2.1.220
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
@@ -101,6 +111,98 @@ function global:_ClaudeCleanupOldCache {
     } | Remove-Item -Recurse -Force
 }
 
+function global:_ClaudeProbeConcurrency {
+    # How many probes to run at once, from the core count.
+    # -Cores is detected when omitted: [Environment]::ProcessorCount reports
+    # logical processors (hyperthreads included) on Windows PowerShell 5.1 and
+    # PowerShell 7+, on every platform, and honours container CPU limits.
+    #
+    # Probes are CPU-bound Node cold starts with some process-spawn I/O, so
+    # mild oversubscription helps. A very wide machine is still capped, since
+    # each probe costs real memory.
+    # Mirrors _claude_probe_concurrency in claude.bash.
+    # -1 rather than 0 marks "not supplied", so an explicit 0 clamps to one
+    # core exactly as it does in claude.bash instead of silently re-detecting.
+    param([int]$Cores = -1)
+    if ($Cores -lt 0) { $Cores = [Environment]::ProcessorCount }
+    # Clamp the core count, not the result — mirrors _claude_probe_concurrency.
+    if ($Cores -lt 1) { $Cores = 1 }
+    $concurrency = $Cores * 2
+    if ($concurrency -gt 16) { $concurrency = 16 }
+    return $concurrency
+}
+
+function global:_ClaudeParseSubcommandTerms {
+    # Emit "<name><TAB><term column>" for each command row in the "Commands:"
+    # section. The term column is the text before the first 2+ space gap, i.e.
+    # the name plus its argument placeholders with the description stripped
+    # off. Same row anchoring as _ClaudeParseSubcommands.
+    param([string[]]$HelpLines)
+    $inCommands = $false
+    foreach ($line in $HelpLines) {
+        if ($line -match '^Commands:') {
+            $inCommands = $true
+            continue
+        }
+        if ($inCommands) {
+            if ([string]::IsNullOrEmpty($line)) { continue }
+            if ($line -notmatch '^\s') { break }
+            if ($line -match '^  ([a-zA-Z][-a-zA-Z]*).*  +\S') {
+                $name = $Matches[1]
+                $term = ($line -replace '^  ', '') -split '  ', 2
+                "$name`t$($term[0])"
+            }
+        }
+    }
+}
+
+function global:_ClaudeNodeIsProbeable {
+    # Decide whether a node listed in a "Commands:" section could itself be a
+    # command group, and so is worth spending a `--help` probe on.
+    #
+    # Two classes never can be:
+    #   help        — Commander's built-in help command is always a leaf
+    #   foo <arg>   — a required argument placeholder means the node consumes
+    #                 a value, not a subcommand
+    #
+    # -Term must be the TERM COLUMN, never the whole help row: descriptions
+    # carry angle brackets of their own (claude plugin eval's mentions
+    # "<eval dir>/**/case.yaml"), and matching those would misclassify a real
+    # command group as a leaf and silently drop its completions.
+    #
+    # The required-<arg> rule is a Commander convention rather than a
+    # guarantee, so tests/bash/prune_guard_test.bash re-checks it against the
+    # installed CLI and fails if upstream ever violates it.
+    param([string]$Name, [string]$Term)
+    if ($Name -eq 'help') { return $false }
+    if ($Term -like '*<*') { return $false }
+    return $true
+}
+
+function global:_ClaudeCanProbeInParallel {
+    # ForEach-Object -Parallel is PowerShell 7+, and each iteration runs in a
+    # fresh runspace that inherits neither this script's functions nor the
+    # session's aliases. A `claude` that is not a plain external executable —
+    # a wrapper function, or a test mock — would therefore resolve to
+    # something else or to nothing at all inside the parallel block, so those
+    # sessions probe serially instead. Both paths write identical files.
+    if ($PSVersionTable.PSVersion.Major -lt 7) { return $false }
+    $cmd = Get-Command claude -ErrorAction SilentlyContinue
+    return ($null -ne $cmd -and $cmd.CommandType -eq 'Application')
+}
+
+function global:_ClaudeParseNode {
+    # Write every per-node cache file for one command path from its captured
+    # help text.
+    param([string]$BuildDir, [string]$Key, [string[]]$HelpLines)
+    Set-Content -Path (Join-Path $BuildDir "${Key}_flags") -Value @(_ClaudeParseFlags -HelpLines $HelpLines)
+    Set-Content -Path (Join-Path $BuildDir "${Key}_flags_with_args") -Value @(_ClaudeParseFlagsWithArgs -HelpLines $HelpLines)
+    Set-Content -Path (Join-Path $BuildDir "${Key}_flags_with_optional_args") -Value @(_ClaudeParseFlagsWithOptionalArgs -HelpLines $HelpLines)
+    Set-Content -Path (Join-Path $BuildDir "${Key}_flag_descriptions") -Value @(_ClaudeParseFlagDescriptions -HelpLines $HelpLines)
+    Set-Content -Path (Join-Path $BuildDir "${Key}_subcommands") -Value @(_ClaudeParseSubcommands -HelpLines $HelpLines)
+    Set-Content -Path (Join-Path $BuildDir "${Key}_subcommand_descriptions") -Value @(_ClaudeParseSubcommandDescriptions -HelpLines $HelpLines)
+}
+
 function global:_ClaudeBuildCache {
     $cacheDir = _ClaudeCacheDir
     # Build into a private staging dir, then publish atomically with a
@@ -110,31 +212,75 @@ function global:_ClaudeBuildCache {
     $buildDir = "$cacheDir.tmp.$PID"
     if (Test-Path $buildDir) { Remove-Item -Recurse -Force $buildDir }
     New-Item -ItemType Directory -Path $buildDir -Force | Out-Null
+    # Raw help text is staged inside the build dir (so a crash cannot strand
+    # it elsewhere) and removed again before the cache is published.
+    $rawDir = Join-Path $buildDir '.raw'
+    New-Item -ItemType Directory -Path $rawDir -Force | Out-Null
 
-    # Parse root level
-    $helpOutput = claude --help 2>$null
-    $helpLines = @($helpOutput -split "`n")
-    Set-Content -Path (Join-Path $buildDir '_root_help') -Value $helpOutput
-    Set-Content -Path (Join-Path $buildDir '_root_flags') -Value @(_ClaudeParseFlags -HelpLines $helpLines)
-    Set-Content -Path (Join-Path $buildDir '_root_flags_with_args') -Value @(_ClaudeParseFlagsWithArgs -HelpLines $helpLines)
-    Set-Content -Path (Join-Path $buildDir '_root_flags_with_optional_args') -Value @(_ClaudeParseFlagsWithOptionalArgs -HelpLines $helpLines)
-    Set-Content -Path (Join-Path $buildDir '_root_flag_descriptions') -Value @(_ClaudeParseFlagDescriptions -HelpLines $helpLines)
-    $subcommands = @(_ClaudeParseSubcommands -HelpLines $helpLines)
-    Set-Content -Path (Join-Path $buildDir '_root_subcommands') -Value $subcommands
-    Set-Content -Path (Join-Path $buildDir '_root_subcommand_descriptions') -Value @(_ClaudeParseSubcommandDescriptions -HelpLines $helpLines)
+    $rootHelp = claude --help 2>$null
+    Set-Content -Path (Join-Path $rawDir '_root') -Value $rootHelp
+    Set-Content -Path (Join-Path $buildDir '_root_help') -Value $rootHelp
 
-    # Parse each subcommand
-    foreach ($subcmd in $subcommands) {
-        if ([string]::IsNullOrWhiteSpace($subcmd)) { continue }
-        $subHelp = claude $subcmd --help 2>$null
-        if (-not $subHelp) { continue }
-        $subHelpLines = @($subHelp -split "`n")
-        Set-Content -Path (Join-Path $buildDir "${subcmd}_flags") -Value @(_ClaudeParseFlags -HelpLines $subHelpLines)
-        Set-Content -Path (Join-Path $buildDir "${subcmd}_flags_with_args") -Value @(_ClaudeParseFlagsWithArgs -HelpLines $subHelpLines)
-        Set-Content -Path (Join-Path $buildDir "${subcmd}_flags_with_optional_args") -Value @(_ClaudeParseFlagsWithOptionalArgs -HelpLines $subHelpLines)
-        Set-Content -Path (Join-Path $buildDir "${subcmd}_flag_descriptions") -Value @(_ClaudeParseFlagDescriptions -HelpLines $subHelpLines)
-        Set-Content -Path (Join-Path $buildDir "${subcmd}_subcommands") -Value @(_ClaudeParseSubcommands -HelpLines $subHelpLines)
-        Set-Content -Path (Join-Path $buildDir "${subcmd}_subcommand_descriptions") -Value @(_ClaudeParseSubcommandDescriptions -HelpLines $subHelpLines)
+    # Walk the command tree one depth at a time, so the nesting we support is
+    # whatever `claude --help` actually describes rather than a fixed number
+    # of levels. Per level: parse the help text already captured for its
+    # nodes, collect the children worth probing, then fetch that next level.
+    #
+    # Only the fetch is parallel. Parsing stays serial and in-process because
+    # -Parallel runs each iteration in a runspace that cannot see these
+    # functions, and both shells must produce identical caches — see
+    # docs/plans/2026-09-17-nested-subcommand-completion.md.
+    #
+    # Cache keys are the command path joined by '_' (plugin_marketplace_flags).
+    # That is unambiguous because claude's command names separate words with
+    # '-' and never '_'.
+    $level = @([pscustomobject]@{ Key = '_root'; Path = '' })
+    $depth = 0
+    $canParallel = _ClaudeCanProbeInParallel
+    $concurrency = if ($null -ne $script:ClaudeProbeConcurrency) {
+        $script:ClaudeProbeConcurrency
+    } else {
+        _ClaudeProbeConcurrency
+    }
+    while ($level.Count -gt 0 -and $depth -lt $script:ClaudeMaxDepth) {
+        $next = [System.Collections.ArrayList]::new()
+        foreach ($node in $level) {
+            $rawFile = Join-Path $rawDir $node.Key
+            # An empty file means the probe failed; leaving the node unparsed
+            # keeps stray empty cache files from looking like real answers.
+            if (-not (Test-Path $rawFile)) { continue }
+            if ((Get-Item $rawFile).Length -eq 0) { continue }
+            $helpLines = @(Get-Content $rawFile)
+            _ClaudeParseNode -BuildDir $buildDir -Key $node.Key -HelpLines $helpLines
+            foreach ($row in @(_ClaudeParseSubcommandTerms -HelpLines $helpLines)) {
+                $parts = $row -split "`t", 2
+                if ($parts.Count -ne 2) { continue }
+                $name = $parts[0]
+                if (-not (_ClaudeNodeIsProbeable -Name $name -Term $parts[1])) { continue }
+                $childKey = if ($node.Key -eq '_root') { $name } else { "$($node.Key)_$name" }
+                $childPath = if ($node.Path) { "$($node.Path) $name" } else { $name }
+                [void]$next.Add([pscustomobject]@{ Key = $childKey; Path = $childPath })
+            }
+        }
+
+        if ($next.Count -gt 0) {
+            if ($canParallel) {
+                $next | ForEach-Object -ThrottleLimit $concurrency -Parallel {
+                    $words = @($_.Path -split ' ' | Where-Object { $_ })
+                    $out = & claude @words --help 2>$null
+                    Set-Content -Path (Join-Path $using:rawDir $_.Key) -Value $out
+                }
+            } else {
+                foreach ($node in $next) {
+                    $words = @($node.Path -split ' ' | Where-Object { $_ })
+                    $out = claude @words --help 2>$null
+                    Set-Content -Path (Join-Path $rawDir $node.Key) -Value $out
+                }
+            }
+        }
+
+        $level = @($next)
+        $depth++
     }
 
     # Merge bundled flags into the cache files (skip ones already present from --help).
@@ -155,7 +301,9 @@ function global:_ClaudeBuildCache {
         Add-Content -Path (Join-Path $buildDir "$($entry.Scope)_flag_arg_types") -Value "$($entry.Name)`t$($entry.ArgType)"
     }
 
-    # Publish atomically: drop any stale/partial dir, then rename into place.
+    # Publish atomically: drop the raw staging dir and any stale/partial
+    # cache, then rename into place.
+    if (Test-Path $rawDir) { Remove-Item -Recurse -Force $rawDir }
     if (Test-Path $cacheDir) { Remove-Item -Recurse -Force $cacheDir }
     Move-Item -Path $buildDir -Destination $cacheDir
 
@@ -548,11 +696,23 @@ function global:_ClaudePluginNames {
     } catch {}
 }
 
-function global:_ClaudeCompleteSubcmdArg {
-    param([string]$Subcmd, [string]$SubSubcmd, [string]$WordToComplete)
+function global:_ClaudeMarketplaceNames {
+    $output = claude plugin marketplace list --json 2>$null
+    if (-not $output) { return }
+    try {
+        $marketplaces = $output | ConvertFrom-Json
+        foreach ($m in $marketplaces) {
+            $m.name
+        }
+    } catch {}
+}
 
-    $key = "$Subcmd/$SubSubcmd"
-    switch ($key) {
+function global:_ClaudeCompleteSubcmdArg {
+    # Complete a positional argument for a resolved command path.
+    # -Path is the command path joined by '/', e.g. plugin/marketplace/remove.
+    param([string]$Path, [string]$WordToComplete)
+
+    switch ($Path) {
         { $_ -in 'mcp/get', 'mcp/remove' } {
             $names = @(_ClaudeMcpServerNames)
             $names | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
@@ -561,6 +721,12 @@ function global:_ClaudeCompleteSubcmdArg {
         }
         { $_ -in 'plugin/disable', 'plugin/enable', 'plugin/uninstall', 'plugin/remove' } {
             $names = @(_ClaudePluginNames)
+            $names | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
+                [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+            }
+        }
+        { $_ -in 'plugin/marketplace/remove', 'plugin/marketplace/update' } {
+            $names = @(_ClaudeMarketplaceNames)
             $names | Where-Object { $_ -like "$WordToComplete*" } | ForEach-Object {
                 [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
             }
@@ -584,20 +750,26 @@ function global:_ClaudeComplete {
         _ClaudeBuildCache
     }
 
-    # Find the subcommand (first non-flag element after 'claude')
-    # Exclude the word being completed — matches bash behavior (i < cword)
-    $subcmd = ''
-    $subcmdIndex = -1
+    # Resolve the command path: walk the elements left to right, extending the
+    # path whenever the next non-flag element is a subcommand of the path so
+    # far. Elements that match nothing are skipped rather than ending the walk,
+    # so a flag's argument ("claude mcp --scope user get") cannot hide the
+    # subcommand that follows it.
+    # The word being completed is excluded — matches bash behavior (i < cword).
+    $key = '_root'
+    $cmdPath = @()
     $loopLimit = if ($WordToComplete -ne '') { $Elements.Count - 1 } else { $Elements.Count }
     for ($i = 1; $i -lt $loopLimit; $i++) {
-        if ($Elements[$i] -notlike '-*') {
-            $potential = $Elements[$i]
-            $subcmdFile = Join-Path $cacheDir '_root_subcommands'
-            if ((Test-Path $subcmdFile) -and ((Get-Content $subcmdFile) -contains $potential)) {
-                $subcmd = $potential
-                $subcmdIndex = $i
-                break
-            }
+        if ($Elements[$i] -like '-*') { continue }
+        $subsFile = Join-Path $cacheDir "${key}_subcommands"
+        # No list for this node means it was pruned as a leaf: nothing deeper
+        # can match, so stop rather than mistaking a positional argument for a
+        # subcommand.
+        if (-not (Test-Path $subsFile)) { break }
+        $potential = $Elements[$i]
+        if ((Get-Content $subsFile) -contains $potential) {
+            $cmdPath += $potential
+            $key = if ($key -eq '_root') { $potential } else { "${key}_$potential" }
         }
     }
 
@@ -608,18 +780,11 @@ function global:_ClaudeComplete {
         $Elements[-2]
     } else { '' }
 
-    # Check if previous word is a flag that takes an argument
+    # Check if previous word is a flag that takes an argument. Flag scope is
+    # the resolved path, so a nested node's flags win over its parent's.
     if ($prev -like '-*') {
-        $flagsWithArgsFile = if ($subcmd) {
-            Join-Path $cacheDir "${subcmd}_flags_with_args"
-        } else {
-            Join-Path $cacheDir '_root_flags_with_args'
-        }
-        $optionalArgsFile = if ($subcmd) {
-            Join-Path $cacheDir "${subcmd}_flags_with_optional_args"
-        } else {
-            Join-Path $cacheDir '_root_flags_with_optional_args'
-        }
+        $flagsWithArgsFile = Join-Path $cacheDir "${key}_flags_with_args"
+        $optionalArgsFile = Join-Path $cacheDir "${key}_flags_with_optional_args"
         if ((Test-Path $flagsWithArgsFile) -and ((Get-Content $flagsWithArgsFile) -contains $prev)) {
             # For optional-arg flags, a current word that already starts with '-'
             # means the user is typing the next flag, not the argument — fall
@@ -627,66 +792,33 @@ function global:_ClaudeComplete {
             # non-dash word) complete the flag's argument.
             $isOptional = (Test-Path $optionalArgsFile) -and ((Get-Content $optionalArgsFile) -contains $prev)
             if (-not ($isOptional -and $WordToComplete -like '-*')) {
-                $scopeArg = if ($subcmd) { $subcmd } else { '_root' }
-                _ClaudeCompleteFlagArg -Flag $prev -WordToComplete $WordToComplete -Scope $scopeArg
+                _ClaudeCompleteFlagArg -Flag $prev -WordToComplete $WordToComplete -Scope $key
                 return
             }
         }
     }
 
-    if ($subcmd) {
-        # Find sub-subcommand (also exclude the word being completed)
-        $subSubcmd = ''
-        for ($i = $subcmdIndex + 1; $i -lt $loopLimit; $i++) {
-            if ($Elements[$i] -notlike '-*') {
-                $potential = $Elements[$i]
-                $subSubFile = Join-Path $cacheDir "${subcmd}_subcommands"
-                if ((Test-Path $subSubFile) -and ((Get-Content $subSubFile) -contains $potential)) {
-                    $subSubcmd = $potential
-                    break
-                }
-            }
-        }
+    $subFile = Join-Path $cacheDir "${key}_subcommands"
+    $hasSubcommands = (Test-Path $subFile) -and ((Get-Item $subFile).Length -gt 0)
 
-        if ($WordToComplete -like '-*') {
-            # Complete subcommand flags
-            $flagsFile = Join-Path $cacheDir "${subcmd}_flags"
-            if (Test-Path $flagsFile) {
-                _ClaudeCompletionsWithTooltips -ListFile $flagsFile `
-                    -DescFile (Join-Path $cacheDir "${subcmd}_flag_descriptions") `
-                    -WordToComplete $WordToComplete -ResultType 'ParameterName'
-            }
-        } elseif ($subSubcmd) {
-            # Complete positional args for sub-subcommands
-            _ClaudeCompleteSubcmdArg -Subcmd $subcmd -SubSubcmd $subSubcmd -WordToComplete $WordToComplete
-        } else {
-            # Complete sub-subcommands
-            $subFile = Join-Path $cacheDir "${subcmd}_subcommands"
-            if (Test-Path $subFile) {
-                _ClaudeCompletionsWithTooltips -ListFile $subFile `
-                    -DescFile (Join-Path $cacheDir "${subcmd}_subcommand_descriptions") `
-                    -WordToComplete $WordToComplete -ResultType 'Command'
-            }
+    if ($WordToComplete -like '-*') {
+        # Complete flags for the resolved node
+        $flagsFile = Join-Path $cacheDir "${key}_flags"
+        if (Test-Path $flagsFile) {
+            _ClaudeCompletionsWithTooltips -ListFile $flagsFile `
+                -DescFile (Join-Path $cacheDir "${key}_flag_descriptions") `
+                -WordToComplete $WordToComplete -ResultType 'ParameterName'
         }
-    } else {
-        # Top level
-        if ($WordToComplete -like '-*') {
-            # Complete flags
-            $flagsFile = Join-Path $cacheDir '_root_flags'
-            if (Test-Path $flagsFile) {
-                _ClaudeCompletionsWithTooltips -ListFile $flagsFile `
-                    -DescFile (Join-Path $cacheDir '_root_flag_descriptions') `
-                    -WordToComplete $WordToComplete -ResultType 'ParameterName'
-            }
-        } else {
-            # Complete subcommands
-            $subFile = Join-Path $cacheDir '_root_subcommands'
-            if (Test-Path $subFile) {
-                _ClaudeCompletionsWithTooltips -ListFile $subFile `
-                    -DescFile (Join-Path $cacheDir '_root_subcommand_descriptions') `
-                    -WordToComplete $WordToComplete -ResultType 'Command'
-            }
-        }
+    } elseif ($hasSubcommands) {
+        # Complete this node's subcommands. The file exists but is empty for a
+        # probed leaf, which must fall through to positional-argument
+        # completion instead of offering nothing.
+        _ClaudeCompletionsWithTooltips -ListFile $subFile `
+            -DescFile (Join-Path $cacheDir "${key}_subcommand_descriptions") `
+            -WordToComplete $WordToComplete -ResultType 'Command'
+    } elseif ($cmdPath.Count -gt 0) {
+        # Complete positional args for the resolved leaf
+        _ClaudeCompleteSubcmdArg -Path ($cmdPath -join '/') -WordToComplete $WordToComplete
     }
 }
 

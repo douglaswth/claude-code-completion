@@ -7,12 +7,14 @@ Shell completion for the `claude` CLI ([Claude Code](https://claude.ai/code)). P
 Both shells share the same core capabilities:
 
 - **Dynamic help parsing** — extracts flags and subcommands from `claude --help` at completion time, so completions stay current across CLI updates
+- **Nested subcommands** — the command tree is walked to whatever depth `claude --help` describes, so `claude plugin marketplace <TAB>` and deeper paths complete, each level offering its own flags
 - **Bundled hidden flags** — also completes flags the running `claude --help` doesn't list: intentionally hidden flags, and flags announced in newer Claude Code versions that lagging installs (e.g. FreeBSD ports) don't yet expose
 - **Version-based caching** — parsed help output is cached per CLI version; old versions are cleaned up automatically
 - **Smart flag completions** — context-aware values for `--model`, `--permission-mode`, `--output-format`, `--input-format`, `--effort`, and more
 - **Session resume** — `--resume` completes session IDs with message previews from your current project
 - **MCP server names** — `claude mcp get/remove` completes server names from `claude mcp list`
 - **Plugin names** — `claude plugin enable/disable/uninstall` completes installed plugin names
+- **Marketplace names** — `claude plugin marketplace remove/update` completes configured marketplace names
 - **Flag and subcommand descriptions** — completions carry the help text for each flag and subcommand: bash renders aligned `# description` columns (Cobra/kubectl style), PowerShell shows tooltips
 
 ### Bash

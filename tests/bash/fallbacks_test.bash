@@ -14,6 +14,9 @@ case "$*" in
     "plugin list --json")
         echo '[{"name":"superpowers","version":"1.0"},{"name":"my-plugin","version":"2.0"}]'
         ;;
+    "plugin marketplace list --json")
+        echo '[{"name":"claude-plugins-official","source":"github"},{"name":"community-marketplace","source":"git"}]'
+        ;;
 esac
 BODY
 )"
@@ -135,4 +138,28 @@ function test_plugin_names_without_jq() {
     PATH="$OLD_PATH"
     assert_contains "superpowers" "$result"
     assert_contains "my-plugin" "$result"
+}
+
+# --- marketplace names with jq ---
+
+function test_marketplace_names_with_jq() {
+    if ! command -v jq &>/dev/null; then skip; return; fi
+    local result
+    result="$(_claude_marketplace_names)"
+    assert_contains "claude-plugins-official" "$result"
+    assert_contains "community-marketplace" "$result"
+}
+
+# --- marketplace names without jq ---
+
+function test_marketplace_names_without_jq() {
+    # The fallback re-implements JSON extraction with grep/sed, so it is the
+    # branch most likely to drift from the real --json output shape.
+    local OLD_PATH="$PATH"
+    PATH="$NO_JQ_PATH"
+    local result
+    result="$(_claude_marketplace_names)"
+    PATH="$OLD_PATH"
+    assert_contains "claude-plugins-official" "$result"
+    assert_contains "community-marketplace" "$result"
 }
