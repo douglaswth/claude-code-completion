@@ -110,12 +110,14 @@ Both shells have comprehensive test suites that use mock `claude` commands to av
 Tests use [bashunit](https://bashunit.com/) in `tests/bash/`:
 
 ```bash
-# Run all tests (installs bashunit automatically if needed)
+# Run all tests (installs bashunit into lib/ if needed)
 ./tests/bash/run-tests.sh
 
 # Run with coverage
 ./tests/bash/run-tests.sh --coverage
 ```
+
+The runner uses its own copy of bashunit in `lib/` and ignores any `bashunit` on `PATH`, so a checkout cannot silently run a different version from CI — which reports different coverage for identical code. It checks for a newer release at most once a day and refreshes the copy in place; if that check or the download fails, the existing copy is left untouched and the tests still run.
 
 Shared test infrastructure lives in `tests/bash/bootstrap.bash`.
 
@@ -135,5 +137,5 @@ Shared test infrastructure lives in `tests/powershell/TestHelper.ps1`.
 
 ### Prerequisites
 
-- [bashunit](https://bashunit.com/installation) (for bash tests; auto-installed by `run-tests.sh` if not found)
+- [bashunit](https://bashunit.com/installation) (for bash tests) — installed into `lib/` by `run-tests.sh` and kept current automatically, so no manual install is needed. A copy on `PATH` is deliberately not used. The first run needs network access.
 - [Pester](https://pester.dev/docs/introduction/installation) v5+ (for PowerShell tests)

@@ -28,12 +28,14 @@ Verify as much as possible locally before reporting work done: run every suite w
 Tests use [bashunit](https://bashunit.com/) in `tests/bash/`:
 
 ```bash
-# Run all tests (installs bashunit automatically if needed)
+# Run all tests (installs bashunit into lib/ if needed)
 ./tests/bash/run-tests.sh
 
 # Run with coverage
 ./tests/bash/run-tests.sh --coverage
 ```
+
+The runner uses `lib/bashunit` exclusively and ignores any `bashunit` on `PATH`: a global copy used to take precedence, which is how a checkout ended up running a different version from CI and reporting different coverage for identical code. It checks for a newer release at most once a day, staging the download so a failure leaves the working copy intact.
 
 Shared test infrastructure lives in `tests/bash/bootstrap.bash`.
 
