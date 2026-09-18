@@ -16,7 +16,7 @@ fi
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-_CLAUDE_CACHE_VERSION=11
+_CLAUDE_CACHE_VERSION=10
 
 # Maximum concurrent `claude ... --help` probes during a cache build. Each is
 # a Node cold start, so the per-level fan-out is batched rather than unbounded.
@@ -68,6 +68,22 @@ _CLAUDE_EXTRA_FLAGS=(
     $'_root\t--teleport\toptional\tunknown\tResume a teleport session, optionally specify session ID'
     $'_root\t--thinking\trequired\tchoice:enabled,adaptive,disabled\tThinking mode: enabled (adaptive) or disabled'
     $'_root\t--thinking-display\trequired\tunknown\tControl how thinking content is displayed'
+)
+
+# Subcommands the CLI implements but omits from the "Commands:" section of
+# `claude --help`. The walk can only learn command names from that section, so
+# without this the node is never probed, none of its flags are cached, and
+# nothing about it can be completed. Bundling its *flags* instead would be
+# inert: the merge below skips any scope that was never probed.
+#
+# Names are added optimistically, exactly as bundled flags are. If one ever
+# disappears upstream, its probe returns nothing and no cache files are
+# written, so only the bare name is offered - the same trade the flag list
+# already makes for older installs.
+#
+# Format: name<TAB>description
+_CLAUDE_EXTRA_SUBCOMMANDS=(
+    $'self-hosted-runner\tRun a self-hosted Claude Code runner'
 )
 
 # Split a tab-separated extra-flag record into its fields.
@@ -405,6 +421,22 @@ _claude_build_cache() {
                 next_keys+=("$child_key")
                 next_paths+=("${path:+$path }$name")
             done < <(_claude_parse_subcommands < "$raw")
+
+            # Hidden subcommands are children of the root and of nothing else.
+            if [[ "$key" == "_root" ]]; then
+                local sub_rec sub_name sub_desc
+                for sub_rec in "${_CLAUDE_EXTRA_SUBCOMMANDS[@]}"; do
+                    [[ -z "$sub_rec" ]] && continue
+                    IFS=$'\t' read -r sub_name sub_desc <<< "$sub_rec"
+                    # --help wins on overlap, as it does for bundled flags.
+                    grep -qx -- "$sub_name" "$build_dir/_root_subcommands" && continue
+                    echo "$sub_name" >> "$build_dir/_root_subcommands"
+                    printf '%s\t%s\n' "$sub_name" "$sub_desc" \
+                        >> "$build_dir/_root_subcommand_descriptions"
+                    next_keys+=("$sub_name")
+                    next_paths+=("$sub_name")
+                done
+            fi
         done
 
         level=()

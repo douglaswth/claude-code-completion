@@ -4,7 +4,7 @@
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-$script:ClaudeCacheVersion = 11
+$script:ClaudeCacheVersion = 10
 
 # Maximum concurrent `claude ... --help` probes during a cache build. Each is
 # a Node cold start, so the per-level fan-out is batched rather than unbounded.
@@ -26,6 +26,20 @@ $script:ClaudeMaxDepth = 6
 #                 (required = <value>; optional = [value], may be omitted)
 #   ArgType     — 'none' | 'file' | 'dir' | 'choice:a,b,c' | 'unknown'
 #   Description — short text
+# Subcommands the CLI implements but omits from the "Commands:" section of
+# `claude --help`. The walk can only learn command names from that section, so
+# without this the node is never probed, none of its flags are cached, and
+# nothing about it can be completed. Bundling its *flags* instead would be
+# inert: the merge skips any scope that was never probed.
+#
+# Names are added optimistically, exactly as bundled flags are. If one ever
+# disappears upstream, its probe returns nothing and no cache files are
+# written, so only the bare name is offered.
+# Keep this list and _CLAUDE_EXTRA_SUBCOMMANDS in claude.bash in sync.
+$script:ClaudeExtraSubcommands = @(
+    [pscustomobject]@{ Name='self-hosted-runner'; Description='Run a self-hosted Claude Code runner' }
+)
+
 $script:ClaudeExtraFlags = @(
     [pscustomobject]@{ Scope='_root'; Name='--append-subagent-system-prompt'; TakesArg='required'; ArgType='unknown'; Description='Text appended to the subagent system prompt' }
     [pscustomobject]@{ Scope='_root'; Name='--append-subagent-system-prompt-file'; TakesArg='required'; ArgType='file'; Description='Read the subagent system prompt from a file' }
@@ -229,6 +243,21 @@ function global:_ClaudeBuildCache {
                 $childKey = if ($node.Key -eq '_root') { $name } else { "$($node.Key)_$name" }
                 $childPath = if ($node.Path) { "$($node.Path) $name" } else { $name }
                 [void]$next.Add([pscustomobject]@{ Key = $childKey; Path = $childPath })
+            }
+
+            # Hidden subcommands are children of the root and of nothing else.
+            if ($node.Key -eq '_root') {
+                $rootSubFile = Join-Path $buildDir '_root_subcommands'
+                foreach ($extra in $script:ClaudeExtraSubcommands) {
+                    if (-not $extra) { continue }
+                    $known = @(Get-Content $rootSubFile -ErrorAction SilentlyContinue)
+                    # --help wins on overlap, as it does for bundled flags.
+                    if ($known -contains $extra.Name) { continue }
+                    Add-Content -Path $rootSubFile -Value $extra.Name
+                    Add-Content -Path (Join-Path $buildDir '_root_subcommand_descriptions') `
+                        -Value "$($extra.Name)`t$($extra.Description)"
+                    [void]$next.Add([pscustomobject]@{ Key = $extra.Name; Path = $extra.Name })
+                }
             }
         }
 

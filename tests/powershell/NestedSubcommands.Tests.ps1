@@ -50,6 +50,14 @@ Options:
   -h, --help          Display help for command
   --remove-force      Remove without confirmation
 '@
+        'hidden-runner --help' = @'
+Usage: claude hidden-runner [options]
+
+Connection:
+  --api-url <url>     API base URL
+  --client-label <label>
+                      Observability label sent at registration
+'@
         'mcp get --help' = @'
 Usage: claude mcp get [options] <name>
 
@@ -127,6 +135,12 @@ Options:
     }
 
     $env:XDG_CACHE_HOME = $TestDrive
+
+    # Declared before the first completion, because the cache is built once
+    # and a later assignment would not be seen by it.
+    $script:ClaudeExtraSubcommands = @(
+        [pscustomobject]@{ Name='hidden-runner'; Description='Run a hidden runner' }
+    )
 }
 
 AfterAll {
@@ -294,6 +308,28 @@ Describe 'Cache build housekeeping' {
         } finally {
             $script:ClaudeProbeConcurrency = $null
         }
+    }
+}
+
+Describe 'Hidden subcommands' {
+    # A subcommand the CLI implements but omits from `claude --help`. The walk
+    # can only learn names from that section, so without the bundled list it is
+    # never probed and nothing about it completes.
+
+    It 'offers the hidden subcommand' {
+        Get-CompletionText 'claude hidden-' | Should -Contain 'hidden-runner'
+    }
+
+    It 'completes the hidden subcommand''s flags' {
+        $r = Get-CompletionText 'claude hidden-runner --'
+        $r | Should -Contain '--client-label'
+        $r | Should -Contain '--api-url'
+    }
+
+    It 'carries its description as a tooltip' {
+        $r = Invoke-ClaudeCompleter 'claude hidden-'
+        ($r | Where-Object { $_.CompletionText -eq 'hidden-runner' }).ToolTip |
+            Should -Be 'Run a hidden runner'
     }
 }
 

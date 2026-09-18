@@ -106,6 +106,16 @@ Commands:
   list                      List servers
 HELP
         ;;
+    "hidden-runner --help")
+        cat << 'HELP'
+Usage: claude hidden-runner [options]
+
+Connection:
+  --api-url <url>     API base URL
+  --client-label <label>
+                      Observability label sent at registration
+HELP
+        ;;
     "mcp get --help")
         cat << 'HELP'
 Usage: claude mcp get [options] <name>
@@ -163,6 +173,10 @@ BODY
 
     export PATH="$MOCK_BIN:$PATH"
     source_claude_bash
+
+    # Declared before the first completion, because the cache is built once
+    # and a later assignment would not be seen by it.
+    _CLAUDE_EXTRA_SUBCOMMANDS=($'hidden-runner\tRun a hidden runner')
 }
 
 function tear_down_after_script() {
@@ -337,6 +351,33 @@ function test_cpu_count_reports_a_positive_integer() {
     n="$(_claude_cpu_count)"
     assert_matches "^[0-9]+$" "$n"
     assert_greater_or_equal_than 1 "$n"
+}
+
+# --- Hidden subcommands -------------------------------------------------
+
+# A subcommand the CLI implements but omits from `claude --help`. The walk can
+# only learn names from that section, so without the bundled list it is never
+# probed and nothing about it completes.
+
+function test_hidden_subcommand_is_offered() {
+    local result
+    result="$(simulate_completion "claude hidden-")"
+    assert_contains "hidden-runner" "$result"
+}
+
+function test_hidden_subcommand_flags_complete() {
+    local result
+    result="$(simulate_completion "claude hidden-runner --")"
+    assert_contains "--client-label" "$result"
+    assert_contains "--api-url" "$result"
+}
+
+function test_hidden_subcommand_carries_its_description() {
+    # Completed at the root, where several candidates match: a lone match
+    # inserts the bare value by design, so descriptions only render here.
+    local result
+    result="$(simulate_completion "claude ")"
+    assert_contains "Run a hidden runner" "$result"
 }
 
 # --- Existing two-level behaviour is unchanged --------------------------
