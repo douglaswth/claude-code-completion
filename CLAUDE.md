@@ -10,6 +10,7 @@ Shell completion for the `claude` CLI (Claude Code). Provides bash and PowerShel
 
 Two single-file completion scripts (`claude.bash` and `claude.ps1`) sharing the same design:
 - Dynamic help parsing — extracts flags and subcommands from `claude --help` at completion time
+- Arbitrary command nesting — the tree is walked one depth at a time until a level has no `Commands:` section, so nesting depth is a property of the CLI rather than of these scripts
 - Version-based caching per CLI version; old versions are cleaned up automatically
 - Smart completions for flag arguments (models, permission modes, session IDs with message previews, etc.)
 - MCP server and plugin name completion for relevant subcommands
@@ -88,3 +89,4 @@ Existing design documents:
 - `docs/plans/2026-03-02-bash-completion-design.md` — design decisions and rationale
 - `docs/plans/2026-07-20-resume-completion-ordering.md` — `--resume` completion: filter by prefix before capping to 10
 - `docs/plans/2026-07-27-model-completion-ordering.md` — `--model` completion: canonical catalog order, and the `nosort` that makes bash honor it
+- `docs/plans/2026-09-17-nested-subcommand-completion.md` — walking the command tree to arbitrary depth: cache key scheme, the probe-pruning heuristic and its guard test, and measured build cost

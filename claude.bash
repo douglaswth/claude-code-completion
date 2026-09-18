@@ -16,7 +16,17 @@ fi
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-_CLAUDE_CACHE_VERSION=8
+_CLAUDE_CACHE_VERSION=9
+
+# Maximum concurrent `claude ... --help` probes during a cache build. Each is
+# a Node cold start, so the per-level fan-out is batched rather than unbounded.
+# Left unset so it is derived from the core count per build by
+# _claude_probe_concurrency; set it to pin a value (the test suite does).
+_CLAUDE_PROBE_CONCURRENCY="${_CLAUDE_PROBE_CONCURRENCY:-}"
+
+# Safety valve on the command-tree walk. Nothing in the CLI approaches this;
+# it exists so a pathological help output can never spin the build forever.
+_CLAUDE_MAX_DEPTH=6
 
 # Bundled flags last extended through CHANGELOG version: 2.1.220
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
@@ -79,6 +89,57 @@ _claude_mtime() {
         printf '%s\n' "$m"
     fi
     return 0
+}
+
+_claude_cpu_count() {
+    # Logical CPU count (hyperthreads included), portable across the platforms
+    # this script supports. Each candidate is guarded the same way _claude_mtime
+    # guards its GNU/BSD stat variants: the wrong tool for the platform exits
+    # non-zero or prints something non-numeric, so every result is checked
+    # before use and the function always returns 0.
+    #
+    # nproc comes first because it honours CPU affinity — a cgroup- or
+    # taskset-limited container reports the budget it actually has rather than
+    # the host's core count. sysctl covers macOS and FreeBSD (where nproc is
+    # not installed), getconf is the POSIX fallback, and NUMBER_OF_PROCESSORS
+    # covers Git Bash / Cygwin on Windows.
+    local n
+    if n="$(nproc 2>/dev/null)" && [[ "$n" =~ ^[0-9]+$ ]]; then
+        printf '%s\n' "$n"
+    elif n="$(sysctl -n hw.ncpu 2>/dev/null)" && [[ "$n" =~ ^[0-9]+$ ]]; then
+        printf '%s\n' "$n"
+    elif n="$(getconf _NPROCESSORS_ONLN 2>/dev/null)" && [[ "$n" =~ ^[0-9]+$ ]]; then
+        printf '%s\n' "$n"
+    elif [[ "${NUMBER_OF_PROCESSORS:-}" =~ ^[0-9]+$ ]]; then
+        printf '%s\n' "$NUMBER_OF_PROCESSORS"
+    else
+        printf '%s\n' 1
+    fi
+    return 0
+}
+
+_claude_probe_concurrency() {
+    # How many probes to run at once, from the core count.
+    # Usage: _claude_probe_concurrency [cores]   (cores detected when omitted)
+    #
+    # Probes are CPU-bound Node cold starts with some process-spawn I/O, so
+    # mild oversubscription helps: on two cores, 4 and 8 measured the same and
+    # both beat 1, while 16 was slower. A very wide machine is still capped,
+    # since each probe costs real memory.
+    local cores="${1:-$(_claude_cpu_count)}"
+    # Clamp the core count, not the result: NUMBER_OF_PROCESSORS is an ordinary
+    # environment variable that the detection above only checks for digits, so
+    # a `0` reaches here and would make the build loop's `launched % 0` raise a
+    # division-by-zero on every probe. Guarding cores also covers a
+    # non-numeric value, which bash evaluates as 0.
+    if (( cores < 1 )); then
+        cores=1
+    fi
+    local concurrency=$(( cores * 2 ))
+    if (( concurrency > 16 )); then
+        concurrency=16
+    fi
+    printf '%s\n' "$concurrency"
 }
 
 # Resolve the claude CLI version. `claude --version` is a slow Node
@@ -259,8 +320,71 @@ _claude_parse_subcommand_descriptions() {
     done
 }
 
+_claude_parse_subcommand_terms() {
+    # Emit "<name><TAB><term column>" for each command row in the "Commands:"
+    # section of help output on stdin. The term column is the text before the
+    # first 2+ space gap, i.e. the name plus its argument placeholders with
+    # the description stripped off. Same row anchoring as
+    # _claude_parse_subcommands.
+    local in_commands=0
+    local line
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^Commands: ]]; then
+            in_commands=1
+            continue
+        fi
+        if [[ $in_commands -eq 1 ]]; then
+            [[ -z "$line" ]] && continue
+            [[ ! "$line" =~ ^[[:space:]] ]] && break
+            local cmd_re='^  ([a-zA-Z][-a-zA-Z]*).*  +[^[:space:]]'
+            if [[ "$line" =~ $cmd_re ]]; then
+                local term="${line#  }"
+                term="${term%%  *}"
+                printf '%s\t%s\n' "${BASH_REMATCH[1]}" "$term"
+            fi
+        fi
+    done
+}
+
+_claude_node_is_probeable() {
+    # Decide whether a node listed in a "Commands:" section could itself be a
+    # command group, and so is worth spending a `--help` probe on.
+    # Usage: _claude_node_is_probeable <name> <term column>
+    #
+    # Two classes never can be:
+    #   help        — Commander's built-in help command is always a leaf
+    #   foo <arg>   — a required argument placeholder means the node consumes
+    #                 a value, not a subcommand
+    #
+    # $2 must be the TERM COLUMN, never the whole help row: descriptions carry
+    # angle brackets of their own (claude plugin eval's mentions
+    # "<eval dir>/**/case.yaml"), and matching those would misclassify a real
+    # command group as a leaf and silently drop its completions.
+    #
+    # The required-<arg> rule is a Commander convention rather than a
+    # guarantee, so tests/bash/prune_guard_test.bash re-checks it against the
+    # installed CLI and fails if upstream ever violates it.
+    local name="$1" term="$2"
+    [[ "$name" == "help" ]] && return 1
+    [[ "$term" == *"<"* ]] && return 1
+    return 0
+}
+
+_claude_parse_node() {
+    # Write every per-node cache file for one command path from its captured
+    # help text.
+    # Usage: _claude_parse_node <build dir> <cache key> <raw help file>
+    local build_dir="$1" key="$2" raw="$3"
+    _claude_parse_flags                   < "$raw" > "$build_dir/${key}_flags"
+    _claude_parse_flags_with_args         < "$raw" > "$build_dir/${key}_flags_with_args"
+    _claude_parse_flags_with_optional_args < "$raw" > "$build_dir/${key}_flags_with_optional_args"
+    _claude_parse_flag_descriptions       < "$raw" > "$build_dir/${key}_flag_descriptions"
+    _claude_parse_subcommands             < "$raw" > "$build_dir/${key}_subcommands"
+    _claude_parse_subcommand_descriptions  < "$raw" > "$build_dir/${key}_subcommand_descriptions"
+}
+
 _claude_build_cache() {
-    local cache_dir build_dir
+    local cache_dir build_dir raw_dir
     cache_dir="$(_claude_cache_dir)"
     # Build into a private staging dir, then publish atomically with a
     # rename. The real version dir therefore only ever exists fully built —
@@ -269,31 +393,71 @@ _claude_build_cache() {
     build_dir="${cache_dir}.tmp.$$"
     rm -rf "$build_dir"
     mkdir -p "$build_dir"
+    # Raw help text is staged inside the build dir (so a crash cannot strand
+    # it elsewhere) and removed again before the cache is published.
+    raw_dir="$build_dir/.raw"
+    mkdir -p "$raw_dir"
 
-    # Parse root level
-    local help_output
-    help_output="$(claude --help 2>/dev/null)"
-    echo "$help_output" > "$build_dir/_root_help"
-    echo "$help_output" | _claude_parse_flags > "$build_dir/_root_flags"
-    echo "$help_output" | _claude_parse_flags_with_args > "$build_dir/_root_flags_with_args"
-    echo "$help_output" | _claude_parse_flags_with_optional_args > "$build_dir/_root_flags_with_optional_args"
-    echo "$help_output" | _claude_parse_flag_descriptions > "$build_dir/_root_flag_descriptions"
-    echo "$help_output" | _claude_parse_subcommands > "$build_dir/_root_subcommands"
-    echo "$help_output" | _claude_parse_subcommand_descriptions > "$build_dir/_root_subcommand_descriptions"
+    claude --help > "$raw_dir/_root" 2>/dev/null
+    cp "$raw_dir/_root" "$build_dir/_root_help"
 
-    # Parse each subcommand
-    local subcmd
-    while IFS= read -r subcmd; do
-        [[ -z "$subcmd" ]] && continue
-        local sub_help
-        sub_help="$(claude "$subcmd" --help 2>/dev/null)" || continue
-        echo "$sub_help" | _claude_parse_flags > "$build_dir/${subcmd}_flags"
-        echo "$sub_help" | _claude_parse_flags_with_args > "$build_dir/${subcmd}_flags_with_args"
-        echo "$sub_help" | _claude_parse_flags_with_optional_args > "$build_dir/${subcmd}_flags_with_optional_args"
-        echo "$sub_help" | _claude_parse_flag_descriptions > "$build_dir/${subcmd}_flag_descriptions"
-        echo "$sub_help" | _claude_parse_subcommands > "$build_dir/${subcmd}_subcommands"
-        echo "$sub_help" | _claude_parse_subcommand_descriptions > "$build_dir/${subcmd}_subcommand_descriptions"
-    done < "$build_dir/_root_subcommands"
+    # Walk the command tree one depth at a time, so the nesting we support is
+    # whatever `claude --help` actually describes rather than a fixed number
+    # of levels. Per level: parse the help text already captured for its
+    # nodes, collect the children worth probing, then fetch that next level.
+    #
+    # Only the fetch is parallel. Parsing stays serial and in-process because
+    # PowerShell's ForEach-Object -Parallel runs each iteration in a runspace
+    # that cannot see the script's functions, and both shells must produce
+    # identical caches — see docs/plans/2026-09-17-nested-subcommand-completion.md.
+    #
+    # Cache keys are the command path joined by '_' (plugin_marketplace_flags).
+    # That is unambiguous because claude's command names separate words with
+    # '-' and never '_'.
+    local -a level=( $'_root\t' )
+    local depth=0
+    local concurrency="${_CLAUDE_PROBE_CONCURRENCY:-$(_claude_probe_concurrency)}"
+    while (( ${#level[@]} > 0 && depth < _CLAUDE_MAX_DEPTH )); do
+        local -a next_keys=() next_paths=()
+        local entry key path name term child_key
+        for entry in "${level[@]}"; do
+            IFS=$'\t' read -r key path <<< "$entry"
+            local raw="$raw_dir/$key"
+            # An empty file means the probe failed; leaving the node unparsed
+            # keeps stray empty cache files from looking like real answers.
+            [[ -s "$raw" ]] || continue
+            _claude_parse_node "$build_dir" "$key" "$raw"
+            while IFS=$'\t' read -r name term; do
+                [[ -z "$name" ]] && continue
+                _claude_node_is_probeable "$name" "$term" || continue
+                if [[ "$key" == "_root" ]]; then
+                    child_key="$name"
+                else
+                    child_key="${key}_${name}"
+                fi
+                next_keys+=("$child_key")
+                next_paths+=("${path:+$path }$name")
+            done < <(_claude_parse_subcommand_terms < "$raw")
+        done
+
+        level=()
+        local i launched=0
+        for (( i=0; i < ${#next_keys[@]}; i++ )); do
+            local -a path_words=()
+            read -ra path_words <<< "${next_paths[i]}"
+            claude "${path_words[@]}" --help > "$raw_dir/${next_keys[i]}" 2>/dev/null &
+            level+=( "${next_keys[i]}"$'\t'"${next_paths[i]}" )
+            # Each probe is a Node cold start, so cap the fan-out rather than
+            # launching a whole level at once. Plain `wait` works on every
+            # bash we support; `wait -n` would require 4.3+.
+            launched=$(( launched + 1 ))
+            if (( launched % concurrency == 0 )); then
+                wait
+            fi
+        done
+        wait
+        depth=$(( depth + 1 ))
+    done
 
     # Merge bundled flags into the cache files (skip ones already present from --help).
     local rec scope name takes_arg arg_type desc flags_file
@@ -316,7 +480,9 @@ _claude_build_cache() {
         printf '%s\t%s\n' "$name" "$arg_type" >> "$build_dir/${scope}_flag_arg_types"
     done
 
-    # Publish atomically: drop any stale/partial dir, then rename into place.
+    # Publish atomically: drop the raw staging dir and any stale/partial
+    # cache, then rename into place.
+    rm -rf "$raw_dir"
     rm -rf "$cache_dir"
     mv "$build_dir" "$cache_dir"
 
@@ -621,12 +787,22 @@ _claude_plugin_names() {
     fi
 }
 
-_claude_complete_subcmd_arg() {
-    local subcmd="$1"
-    local sub_subcmd="$2"
-    local cur="$3"
+_claude_marketplace_names() {
+    # Extract marketplace names from "claude plugin marketplace list --json"
+    if command -v jq &>/dev/null; then
+        claude plugin marketplace list --json 2>/dev/null | jq -r '.[].name' 2>/dev/null
+    else
+        claude plugin marketplace list --json 2>/dev/null | grep -o '"name":"[^"]*"' | sed 's/"name":"//;s/"//'
+    fi
+}
 
-    case "${subcmd}/${sub_subcmd}" in
+_claude_complete_subcmd_arg() {
+    # Complete a positional argument for a resolved command path.
+    # Usage: _claude_complete_subcmd_arg <path joined by /> <current word>
+    local path="$1"
+    local cur="$2"
+
+    case "$path" in
         mcp/get|mcp/remove)
             local names
             names="$(_claude_mcp_server_names)"
@@ -635,6 +811,11 @@ _claude_complete_subcmd_arg() {
         plugin/disable|plugin/enable|plugin/uninstall|plugin/remove)
             local names
             names="$(_claude_plugin_names)"
+            COMPREPLY=( $(compgen -W "$names" -- "$cur") )
+            ;;
+        plugin/marketplace/remove|plugin/marketplace/update)
+            local names
+            names="$(_claude_marketplace_names)"
             COMPREPLY=( $(compgen -W "$names" -- "$cur") )
             ;;
     esac
@@ -702,29 +883,37 @@ _claude() {
         _claude_build_cache
     fi
 
-    # Determine which subcommand we're in (if any)
-    local subcmd=""
-    local i
+    # Resolve the command path: walk the words left to right, extending the
+    # path whenever the next non-flag word is a subcommand of the path so far.
+    # Words that match nothing are skipped rather than ending the walk, so a
+    # flag's argument ("claude mcp --scope user get") cannot hide the
+    # subcommand that follows it.
+    local key="_root"
+    local -a cmd_path=()
+    local i w subs_file
     for (( i=1; i < cword; i++ )); do
-        if [[ "${words[i]}" != -* ]]; then
-            local potential="${words[i]}"
-            if [[ -f "$cache_dir/_root_subcommands" ]] && grep -qx "$potential" "$cache_dir/_root_subcommands"; then
-                subcmd="$potential"
-                break
+        w="${words[i]}"
+        [[ "$w" == -* ]] && continue
+        subs_file="$cache_dir/${key}_subcommands"
+        # No list for this node means it was pruned as a leaf: nothing deeper
+        # can match, so stop rather than mistaking a positional argument for
+        # a subcommand.
+        [[ -f "$subs_file" ]] || break
+        if grep -qx -- "$w" "$subs_file"; then
+            cmd_path+=("$w")
+            if [[ "$key" == "_root" ]]; then
+                key="$w"
+            else
+                key="${key}_${w}"
             fi
         fi
     done
 
-    # Check if previous word is a flag that takes an argument
+    # Check if previous word is a flag that takes an argument. Flag scope is
+    # the resolved path, so a nested node's flags win over its parent's.
     if [[ "$prev" == -* ]]; then
-        local flags_with_args_file="$cache_dir/_root_flags_with_args"
-        local optional_args_file="$cache_dir/_root_flags_with_optional_args"
-        local _scope="_root"
-        if [[ -n "$subcmd" ]]; then
-            flags_with_args_file="$cache_dir/${subcmd}_flags_with_args"
-            optional_args_file="$cache_dir/${subcmd}_flags_with_optional_args"
-            _scope="$subcmd"
-        fi
+        local flags_with_args_file="$cache_dir/${key}_flags_with_args"
+        local optional_args_file="$cache_dir/${key}_flags_with_optional_args"
         if [[ -f "$flags_with_args_file" ]] && grep -qx -- "$prev" "$flags_with_args_file"; then
             # For optional-arg flags, a current word that already starts with '-'
             # means the user is typing the next flag, not the argument — fall
@@ -733,59 +922,31 @@ _claude() {
             if [[ "$cur" == -* && -f "$optional_args_file" ]] && grep -qx -- "$prev" "$optional_args_file"; then
                 : # fall through
             else
-                _claude_complete_flag_arg "$prev" "$cur" "$_scope"
+                _claude_complete_flag_arg "$prev" "$cur" "$key"
                 return
             fi
         fi
     fi
 
-    if [[ -n "$subcmd" ]]; then
-        # Find sub-subcommand if present
-        local sub_subcmd=""
-        for (( i=i+1; i < cword; i++ )); do
-            if [[ "${words[i]}" != -* ]]; then
-                local potential="${words[i]}"
-                if [[ -f "$cache_dir/${subcmd}_subcommands" ]] && grep -qx "$potential" "$cache_dir/${subcmd}_subcommands"; then
-                    sub_subcmd="$potential"
-                    break
-                fi
-            fi
-        done
-
-        if [[ "$cur" == -* ]]; then
-            if [[ -f "$cache_dir/${subcmd}_flags" ]]; then
-                _claude_compreply_with_descriptions \
-                    "$cache_dir/${subcmd}_flags" "$cur" \
-                    "$cache_dir/${subcmd}_flag_descriptions"
-            fi
-        elif [[ -n "$sub_subcmd" ]]; then
-            # Complete positional args for sub-subcommands
-            _claude_complete_subcmd_arg "$subcmd" "$sub_subcmd" "$cur"
-        else
-            # Complete sub-subcommands
-            if [[ -f "$cache_dir/${subcmd}_subcommands" ]]; then
-                _claude_compreply_with_descriptions \
-                    "$cache_dir/${subcmd}_subcommands" "$cur" \
-                    "$cache_dir/${subcmd}_subcommand_descriptions"
-            fi
+    if [[ "$cur" == -* ]]; then
+        # Complete flags for the resolved node
+        if [[ -f "$cache_dir/${key}_flags" ]]; then
+            _claude_compreply_with_descriptions \
+                "$cache_dir/${key}_flags" "$cur" \
+                "$cache_dir/${key}_flag_descriptions"
         fi
-    else
-        # Top level
-        if [[ "$cur" == -* ]]; then
-            # Complete flags
-            if [[ -f "$cache_dir/_root_flags" ]]; then
-                _claude_compreply_with_descriptions \
-                    "$cache_dir/_root_flags" "$cur" \
-                    "$cache_dir/_root_flag_descriptions"
-            fi
-        else
-            # Complete subcommands
-            if [[ -f "$cache_dir/_root_subcommands" ]]; then
-                _claude_compreply_with_descriptions \
-                    "$cache_dir/_root_subcommands" "$cur" \
-                    "$cache_dir/_root_subcommand_descriptions"
-            fi
-        fi
+    elif [[ -s "$cache_dir/${key}_subcommands" ]]; then
+        # Complete this node's subcommands. The file exists but is empty for a
+        # probed leaf, which must fall through to positional-argument
+        # completion instead of offering nothing.
+        _claude_compreply_with_descriptions \
+            "$cache_dir/${key}_subcommands" "$cur" \
+            "$cache_dir/${key}_subcommand_descriptions"
+    elif (( ${#cmd_path[@]} > 0 )); then
+        # Complete positional args for the resolved leaf
+        local joined
+        joined="$(IFS=/; printf '%s' "${cmd_path[*]}")"
+        _claude_complete_subcmd_arg "$joined" "$cur"
     fi
 }
 
