@@ -11,8 +11,25 @@ BENCH_REPS="${BENCH_REPS:-3}"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
+# A CI checkout creates only the branch it checked out, so a baseline like
+# `main` exists solely as `origin/main` there. Resolve either spelling.
+resolve_ref() {
+    local ref="$1"
+    if git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null; then
+        printf '%s\n' "$ref"
+    elif git rev-parse --verify --quiet "origin/${ref}^{commit}" >/dev/null; then
+        printf '%s\n' "origin/${ref}"
+    else
+        echo "bench: cannot resolve baseline ref '${ref}' locally or as origin/${ref}" >&2
+        return 1
+    fi
+}
+
+BASELINE_REF="$(resolve_ref "$BASELINE_REF")"
+
 baseline_script="$(mktemp)"
 git show "${BASELINE_REF}:claude.bash" > "$baseline_script"
+[[ -s "$baseline_script" ]] || { echo "bench: baseline claude.bash is empty" >&2; exit 1; }
 
 # shellcheck source=/dev/null
 cores="$(source ./claude.bash >/dev/null 2>&1; _claude_cpu_count)"
@@ -32,6 +49,14 @@ run_build() {
     cache="$(mktemp -d)"
     TIMEFORMAT=%R
     elapsed="$( { time ( XDG_CACHE_HOME="$cache" bash -c "source '$script'; _claude_build_cache" >/dev/null 2>&1 ) ; } 2>&1 )"
+    # A build that produced no cache took no time worth reporting. Without this
+    # a broken variant times its own failure and the report looks like a
+    # spectacular speedup.
+    if [[ -z "$(find "$cache" -name '_root_help' -print -quit 2>/dev/null)" ]]; then
+        rm -rf "$cache"
+        echo "bench: '$script' built no cache" >&2
+        return 1
+    fi
     rm -rf "$cache"
     printf '%s\n' "$elapsed"
 }

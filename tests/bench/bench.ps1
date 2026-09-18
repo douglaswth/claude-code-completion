@@ -29,8 +29,27 @@ if ($PSVersionTable.PSVersion.Major -ge 6) {
     $shellExe = 'powershell'
 }
 
+# A CI checkout creates only the branch it checked out, so a baseline like
+# `main` exists solely as `origin/main` there. Resolve either spelling.
+# Written as explicit $LASTEXITCODE checks: `cmd || throw` is a syntax error in
+# Windows PowerShell 5.1, which would break this file at parse time.
+function Resolve-BaselineRef {
+    param([string]$Ref)
+    git rev-parse --verify --quiet "$Ref^{commit}" *> $null
+    if ($LASTEXITCODE -eq 0) { return $Ref }
+    git rev-parse --verify --quiet "origin/$Ref^{commit}" *> $null
+    if ($LASTEXITCODE -eq 0) { return "origin/$Ref" }
+    throw "bench: cannot resolve baseline ref '$Ref' locally or as origin/$Ref"
+}
+
+$baselineRef = Resolve-BaselineRef -Ref $baselineRef
+
 $baselineScript = Join-Path ([System.IO.Path]::GetTempPath()) 'claude-baseline.ps1'
 git show "${baselineRef}:claude.ps1" | Set-Content -Path $baselineScript
+if ($LASTEXITCODE -ne 0) { throw "bench: git show ${baselineRef}:claude.ps1 failed" }
+if (-not (Test-Path $baselineScript) -or (Get-Item $baselineScript).Length -eq 0) {
+    throw "bench: baseline claude.ps1 is empty"
+}
 
 . ./claude.ps1
 $cores = [Environment]::ProcessorCount
@@ -53,8 +72,14 @@ function Invoke-TimedBuild {
     $sw = [Diagnostics.Stopwatch]::StartNew()
     & $shellExe -NoProfile -Command ". '$ScriptPath'; _ClaudeBuildCache" *> $null
     $sw.Stop()
+    # A build that produced no cache took no time worth reporting. *> $null
+    # hides the child's errors, so verify the artifact instead: without this a
+    # broken variant times its own failure and the report reads as a
+    # spectacular speedup.
+    $built = @(Get-ChildItem -Path $cache -Recurse -Filter '_root_help' -ErrorAction SilentlyContinue)
     $env:XDG_CACHE_HOME = $null
     Remove-Item -Recurse -Force $cache -ErrorAction SilentlyContinue
+    if ($built.Count -eq 0) { throw "bench: '$ScriptPath' built no cache" }
     return [math]::Round($sw.Elapsed.TotalSeconds, 2)
 }
 
