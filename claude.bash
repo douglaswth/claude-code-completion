@@ -16,7 +16,7 @@ fi
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-_CLAUDE_CACHE_VERSION=10
+_CLAUDE_CACHE_VERSION=11
 
 # Maximum concurrent `claude ... --help` probes during a cache build. Each is
 # a Node cold start, so the per-level fan-out is batched rather than unbounded.
@@ -28,7 +28,7 @@ _CLAUDE_PROBE_CONCURRENCY="${_CLAUDE_PROBE_CONCURRENCY:-}"
 # it exists so a pathological help output can never spin the build forever.
 _CLAUDE_MAX_DEPTH=6
 
-# Bundled flags last extended through CHANGELOG version: 2.1.220
+# Bundled flags last extended through CHANGELOG version: 2.1.276
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Format: scope<TAB>name<TAB>takes_arg<TAB>arg_type<TAB>description
@@ -39,6 +39,9 @@ _CLAUDE_MAX_DEPTH=6
 #   arg_type  — none | file | dir | choice:a,b,c | unknown
 #   description — short text; no embedded tabs
 _CLAUDE_EXTRA_FLAGS=(
+    $'_root\t--append-subagent-system-prompt\trequired\tunknown\tText appended to the subagent system prompt'
+    $'_root\t--append-subagent-system-prompt-file\trequired\tfile\tRead the subagent system prompt from a file'
+    $'_root\t--append-system-prompt-file\trequired\tfile\tRead text appended to the system prompt from a file'
     $'_root\t--background\tnone\tnone\tRun the session in the background'
     $'_root\t--bg\tnone\tnone\tRun the session in the background'
     $'_root\t--capacity\trequired\tunknown\tMax concurrent sessions for --remote-control'
@@ -61,6 +64,7 @@ _CLAUDE_EXTRA_FLAGS=(
     $'_root\t--rewind-files\trequired\tunknown\tRewind files to a given message ID (requires --resume)'
     $'_root\t--session-mirror\tnone\tnone\tMirror local sessions to claude.ai as view-only'
     $'_root\t--spawn\trequired\tchoice:same-dir,worktree,session\tSpawn mode for --remote-control sessions'
+    $'_root\t--system-prompt-file\trequired\tfile\tRead the system prompt from a file'
     $'_root\t--teleport\toptional\tunknown\tResume a teleport session, optionally specify session ID'
     $'_root\t--thinking\trequired\tchoice:enabled,adaptive,disabled\tThinking mode: enabled (adaptive) or disabled'
     $'_root\t--thinking-display\trequired\tunknown\tControl how thinking content is displayed'

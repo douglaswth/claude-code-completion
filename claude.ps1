@@ -4,7 +4,7 @@
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-$script:ClaudeCacheVersion = 10
+$script:ClaudeCacheVersion = 11
 
 # Maximum concurrent `claude ... --help` probes during a cache build. Each is
 # a Node cold start, so the per-level fan-out is batched rather than unbounded.
@@ -16,7 +16,7 @@ $script:ClaudeProbeConcurrency = $null
 # it exists so a pathological help output can never spin the build forever.
 $script:ClaudeMaxDepth = 6
 
-# Bundled flags last extended through CHANGELOG version: 2.1.220
+# Bundled flags last extended through CHANGELOG version: 2.1.276
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Each entry has fields: Scope, Name, TakesArg, ArgType, Description
@@ -27,6 +27,9 @@ $script:ClaudeMaxDepth = 6
 #   ArgType     — 'none' | 'file' | 'dir' | 'choice:a,b,c' | 'unknown'
 #   Description — short text
 $script:ClaudeExtraFlags = @(
+    [pscustomobject]@{ Scope='_root'; Name='--append-subagent-system-prompt'; TakesArg='required'; ArgType='unknown'; Description='Text appended to the subagent system prompt' }
+    [pscustomobject]@{ Scope='_root'; Name='--append-subagent-system-prompt-file'; TakesArg='required'; ArgType='file'; Description='Read the subagent system prompt from a file' }
+    [pscustomobject]@{ Scope='_root'; Name='--append-system-prompt-file'; TakesArg='required'; ArgType='file'; Description='Read text appended to the system prompt from a file' }
     [pscustomobject]@{ Scope='_root'; Name='--background'; TakesArg='none'; ArgType='none'; Description='Run the session in the background' }
     [pscustomobject]@{ Scope='_root'; Name='--bg'; TakesArg='none'; ArgType='none'; Description='Run the session in the background' }
     [pscustomobject]@{ Scope='_root'; Name='--capacity'; TakesArg='required'; ArgType='unknown'; Description='Max concurrent sessions for --remote-control' }
@@ -49,6 +52,7 @@ $script:ClaudeExtraFlags = @(
     [pscustomobject]@{ Scope='_root'; Name='--rewind-files'; TakesArg='required'; ArgType='unknown'; Description='Rewind files to a given message ID (requires --resume)' }
     [pscustomobject]@{ Scope='_root'; Name='--session-mirror'; TakesArg='none'; ArgType='none'; Description='Mirror local sessions to claude.ai as view-only' }
     [pscustomobject]@{ Scope='_root'; Name='--spawn'; TakesArg='required'; ArgType='choice:same-dir,worktree,session'; Description='Spawn mode for --remote-control sessions' }
+    [pscustomobject]@{ Scope='_root'; Name='--system-prompt-file'; TakesArg='required'; ArgType='file'; Description='Read the system prompt from a file' }
     [pscustomobject]@{ Scope='_root'; Name='--teleport'; TakesArg='optional'; ArgType='unknown'; Description='Resume a teleport session, optionally specify session ID' }
     [pscustomobject]@{ Scope='_root'; Name='--thinking'; TakesArg='required'; ArgType='choice:enabled,adaptive,disabled'; Description='Thinking mode: enabled (adaptive) or disabled' }
     [pscustomobject]@{ Scope='_root'; Name='--thinking-display'; TakesArg='required'; ArgType='unknown'; Description='Control how thinking content is displayed' }
