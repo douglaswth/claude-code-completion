@@ -1,0 +1,83 @@
+# Cache-build benchmark. Manually triggered — this is a measurement job, not a
+# check, and it installs the real Claude Code CLI rather than using the mocks
+# the test suites run against.
+#
+# It exists to answer two questions local measurement could not: whether the
+# parallel probe fan-out actually scales with core count (the dev machine has
+# two), and what the nested walk costs on Windows, including Windows
+# PowerShell 5.1's serial fallback.
+#
+# The CLI updates itself when invoked, and a cache build invokes it ~38 times,
+# so timings are only comparable if the version holds still. There is no
+# documented way to disable the updater in user scope, so each job settles it
+# first and asserts the version is unchanged after the timed section.
+
+name: Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: Git ref to compare against
+        default: main
+        required: false
+      reps:
+        description: Timed repetitions per variant
+        default: '3'
+        required: false
+
+jobs:
+  bench:
+    name: ${{ matrix.os }} / ${{ matrix.shell }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            shell: bash
+          - os: macos-latest
+            shell: bash
+          - os: windows-latest
+            shell: pwsh
+          - os: windows-latest
+            shell: powershell   # Windows PowerShell 5.1 — the serial fallback
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # claude.bash uses namerefs and associative arrays, so it needs bash 4+;
+      # macOS ships 3.2. Mirrors the same step in test.yml.
+      - name: Install modern bash (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install bash
+          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+
+      - name: Install Claude Code (native installer)
+        if: runner.os != 'Windows'
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install Claude Code (native installer)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          irm https://claude.ai/install.ps1 | iex
+          "$HOME\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Report machine and settle the auto-updater
+        shell: ${{ matrix.shell }}
+        run: |
+          claude --version
+          claude --help > /dev/null 2>&1 || true
+          claude --version
+
+      - name: Benchmark
+        shell: ${{ matrix.shell }}
+        run: ${{ matrix.shell == 'bash' && './tests/bench/bench.sh' || './tests/bench/bench.ps1' }}
+        env:
+          BASELINE_REF: ${{ inputs.baseline_ref }}
+          BENCH_REPS: ${{ inputs.reps }}
