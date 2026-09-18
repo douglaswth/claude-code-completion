@@ -68,9 +68,23 @@ jobs:
           irm https://claude.ai/install.ps1 | iex
           "$HOME\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
-      - name: Benchmark
-        shell: ${{ matrix.shell }}
-        run: ${{ matrix.shell == 'bash' && './tests/bench/bench.sh' || './tests/bench/bench.ps1' }}
+      # The matrix context is not available in a step's `shell:` key, so the
+      # PowerShell job pins `shell: pwsh` and launches the shell under test as
+      # a command — the same pattern test.yml uses to reach Windows
+      # PowerShell 5.1.
+      - name: Benchmark (bash)
+        if: matrix.shell == 'bash'
+        shell: bash
+        run: ./tests/bench/bench.sh
+        env:
+          BASELINE_REF: ${{ inputs.baseline_ref }}
+          BENCH_REPS: ${{ inputs.reps }}
+
+      - name: Benchmark (PowerShell)
+        if: matrix.shell != 'bash'
+        shell: pwsh
+        run: |
+          & ${{ matrix.shell }} -ExecutionPolicy Bypass -File tests/bench/bench.ps1
         env:
           BASELINE_REF: ${{ inputs.baseline_ref }}
           BENCH_REPS: ${{ inputs.reps }}
