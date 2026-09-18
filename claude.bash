@@ -16,7 +16,7 @@ fi
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-_CLAUDE_CACHE_VERSION=9
+_CLAUDE_CACHE_VERSION=10
 
 # Maximum concurrent `claude ... --help` probes during a cache build. Each is
 # a Node cold start, so the per-level fan-out is batched rather than unbounded.
@@ -320,53 +320,16 @@ _claude_parse_subcommand_descriptions() {
     done
 }
 
-_claude_parse_subcommand_terms() {
-    # Emit "<name><TAB><term column>" for each command row in the "Commands:"
-    # section of help output on stdin. The term column is the text before the
-    # first 2+ space gap, i.e. the name plus its argument placeholders with
-    # the description stripped off. Same row anchoring as
-    # _claude_parse_subcommands.
-    local in_commands=0
-    local line
-    while IFS= read -r line; do
-        if [[ "$line" =~ ^Commands: ]]; then
-            in_commands=1
-            continue
-        fi
-        if [[ $in_commands -eq 1 ]]; then
-            [[ -z "$line" ]] && continue
-            [[ ! "$line" =~ ^[[:space:]] ]] && break
-            local cmd_re='^  ([a-zA-Z][-a-zA-Z]*).*  +[^[:space:]]'
-            if [[ "$line" =~ $cmd_re ]]; then
-                local term="${line#  }"
-                term="${term%%  *}"
-                printf '%s\t%s\n' "${BASH_REMATCH[1]}" "$term"
-            fi
-        fi
-    done
-}
-
 _claude_node_is_probeable() {
-    # Decide whether a node listed in a "Commands:" section could itself be a
-    # command group, and so is worth spending a `--help` probe on.
-    # Usage: _claude_node_is_probeable <name> <term column>
+    # Decide whether a node listed in a "Commands:" section is worth spending a
+    # `--help` probe on. Every node is, except Commander's built-in help
+    # command, which is always a leaf and whose only flag is --help itself.
     #
-    # Two classes never can be:
-    #   help        — Commander's built-in help command is always a leaf
-    #   foo <arg>   — a required argument placeholder means the node consumes
-    #                 a value, not a subcommand
-    #
-    # $2 must be the TERM COLUMN, never the whole help row: descriptions carry
-    # angle brackets of their own (claude plugin eval's mentions
-    # "<eval dir>/**/case.yaml"), and matching those would misclassify a real
-    # command group as a leaf and silently drop its completions.
-    #
-    # The required-<arg> rule is a Commander convention rather than a
-    # guarantee, so tests/bash/prune_guard_test.bash re-checks it against the
-    # installed CLI and fails if upstream ever violates it.
-    local name="$1" term="$2"
+    # Every other node is probed even when it cannot be a command group,
+    # because its help still carries the flags *it* accepts. Skipping those
+    # left `claude plugin install -<TAB>` with nothing to offer.
+    local name="$1"
     [[ "$name" == "help" ]] && return 1
-    [[ "$term" == *"<"* ]] && return 1
     return 0
 }
 
@@ -427,9 +390,9 @@ _claude_build_cache() {
             # keeps stray empty cache files from looking like real answers.
             [[ -s "$raw" ]] || continue
             _claude_parse_node "$build_dir" "$key" "$raw"
-            while IFS=$'\t' read -r name term; do
+            while IFS= read -r name; do
                 [[ -z "$name" ]] && continue
-                _claude_node_is_probeable "$name" "$term" || continue
+                _claude_node_is_probeable "$name" || continue
                 if [[ "$key" == "_root" ]]; then
                     child_key="$name"
                 else
@@ -437,7 +400,7 @@ _claude_build_cache() {
                 fi
                 next_keys+=("$child_key")
                 next_paths+=("${path:+$path }$name")
-            done < <(_claude_parse_subcommand_terms < "$raw")
+            done < <(_claude_parse_subcommands < "$raw")
         done
 
         level=()

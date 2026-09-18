@@ -4,7 +4,7 @@
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-$script:ClaudeCacheVersion = 9
+$script:ClaudeCacheVersion = 10
 
 # Maximum concurrent `claude ... --help` probes during a cache build. Each is
 # a Node cold start, so the per-level fan-out is batched rather than unbounded.
@@ -132,50 +132,17 @@ function global:_ClaudeProbeConcurrency {
     return $concurrency
 }
 
-function global:_ClaudeParseSubcommandTerms {
-    # Emit "<name><TAB><term column>" for each command row in the "Commands:"
-    # section. The term column is the text before the first 2+ space gap, i.e.
-    # the name plus its argument placeholders with the description stripped
-    # off. Same row anchoring as _ClaudeParseSubcommands.
-    param([string[]]$HelpLines)
-    $inCommands = $false
-    foreach ($line in $HelpLines) {
-        if ($line -match '^Commands:') {
-            $inCommands = $true
-            continue
-        }
-        if ($inCommands) {
-            if ([string]::IsNullOrEmpty($line)) { continue }
-            if ($line -notmatch '^\s') { break }
-            if ($line -match '^  ([a-zA-Z][-a-zA-Z]*).*  +\S') {
-                $name = $Matches[1]
-                $term = ($line -replace '^  ', '') -split '  ', 2
-                "$name`t$($term[0])"
-            }
-        }
-    }
-}
-
 function global:_ClaudeNodeIsProbeable {
-    # Decide whether a node listed in a "Commands:" section could itself be a
-    # command group, and so is worth spending a `--help` probe on.
+    # Decide whether a node listed in a "Commands:" section is worth spending a
+    # `--help` probe on. Every node is, except Commander's built-in help
+    # command, which is always a leaf and whose only flag is --help itself.
     #
-    # Two classes never can be:
-    #   help        — Commander's built-in help command is always a leaf
-    #   foo <arg>   — a required argument placeholder means the node consumes
-    #                 a value, not a subcommand
-    #
-    # -Term must be the TERM COLUMN, never the whole help row: descriptions
-    # carry angle brackets of their own (claude plugin eval's mentions
-    # "<eval dir>/**/case.yaml"), and matching those would misclassify a real
-    # command group as a leaf and silently drop its completions.
-    #
-    # The required-<arg> rule is a Commander convention rather than a
-    # guarantee, so tests/bash/prune_guard_test.bash re-checks it against the
-    # installed CLI and fails if upstream ever violates it.
-    param([string]$Name, [string]$Term)
+    # Every other node is probed even when it cannot be a command group,
+    # because its help still carries the flags *it* accepts. Skipping those
+    # left `claude plugin install -<TAB>` with nothing to offer.
+    # Mirrors _claude_node_is_probeable in claude.bash.
+    param([string]$Name)
     if ($Name -eq 'help') { return $false }
-    if ($Term -like '*<*') { return $false }
     return $true
 }
 
@@ -252,11 +219,9 @@ function global:_ClaudeBuildCache {
             if ((Get-Item $rawFile).Length -eq 0) { continue }
             $helpLines = @(Get-Content $rawFile)
             _ClaudeParseNode -BuildDir $buildDir -Key $node.Key -HelpLines $helpLines
-            foreach ($row in @(_ClaudeParseSubcommandTerms -HelpLines $helpLines)) {
-                $parts = $row -split "`t", 2
-                if ($parts.Count -ne 2) { continue }
-                $name = $parts[0]
-                if (-not (_ClaudeNodeIsProbeable -Name $name -Term $parts[1])) { continue }
+            foreach ($name in @(_ClaudeParseSubcommands -HelpLines $helpLines)) {
+                if ([string]::IsNullOrWhiteSpace($name)) { continue }
+                if (-not (_ClaudeNodeIsProbeable -Name $name)) { continue }
                 $childKey = if ($node.Key -eq '_root') { $name } else { "$($node.Key)_$name" }
                 $childPath = if ($node.Path) { "$($node.Path) $name" } else { $name }
                 [void]$next.Add([pscustomobject]@{ Key = $childKey; Path = $childPath })

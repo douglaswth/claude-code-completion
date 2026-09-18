@@ -36,6 +36,27 @@ Commands:
   list [options]                       List installed plugins
   marketplace                          Manage Claude Code marketplaces
 '@
+        'plugin enable --help' = @'
+Usage: claude plugin enable [options] <plugin>
+
+Options:
+  -h, --help          Display help for command
+  --enable-force      Force enabling the plugin
+'@
+        'plugin marketplace remove --help' = @'
+Usage: claude plugin marketplace remove [options] <name>
+
+Options:
+  -h, --help          Display help for command
+  --remove-force      Remove without confirmation
+'@
+        'mcp get --help' = @'
+Usage: claude mcp get [options] <name>
+
+Options:
+  -h, --help        Display help
+  --get-json        Print the server entry as JSON
+'@
         'plugin marketplace --help' = @'
 Usage: claude plugin marketplace [options] [command]
 
@@ -139,6 +160,28 @@ Describe 'Third-level subcommand completion' {
     }
 }
 
+Describe 'Flags at a leaf that takes a positional argument' {
+    # Regression: pruning nodes with a required <arg> meant their help was
+    # never probed, so their flags were never cached and
+    # `claude plugin install -<TAB>` offered nothing at all.
+
+    It 'completes a leaf''s own flags' {
+        Get-CompletionText 'claude plugin enable -' | Should -Contain '--enable-force'
+    }
+
+    It 'offers the leaf''s flags, not its parent''s' {
+        Get-CompletionText 'claude plugin enable -' | Should -Not -Contain '--plugin-scope'
+    }
+
+    It 'completes a third-level leaf''s own flags' {
+        Get-CompletionText 'claude plugin marketplace remove -' | Should -Contain '--remove-force'
+    }
+
+    It 'completes an mcp leaf''s own flags' {
+        Get-CompletionText 'claude mcp get -' | Should -Contain '--get-json'
+    }
+}
+
 Describe 'Depth is not hardcoded' {
     It 'completes a fourth level' {
         $results = Get-CompletionText 'claude deep one two '
@@ -173,22 +216,24 @@ Describe 'Third-level positional arguments' {
 }
 
 Describe 'Pruning' {
-    It 'rejects help and required-argument nodes' {
-        _ClaudeNodeIsProbeable -Name 'help' -Term 'help [command]' | Should -BeFalse
-        _ClaudeNodeIsProbeable -Name 'get' -Term 'get <name>' | Should -BeFalse
+    It 'rejects help' {
+        _ClaudeNodeIsProbeable -Name 'help' | Should -BeFalse
     }
 
-    It 'accepts real command groups' {
-        _ClaudeNodeIsProbeable -Name 'marketplace' -Term 'marketplace' | Should -BeTrue
-        _ClaudeNodeIsProbeable -Name 'eval' -Term 'eval [options] [target]' | Should -BeTrue
+    It 'accepts everything else' {
+        # Including nodes that take a required argument: they cannot be
+        # command groups, but their help still lists the flags they accept.
+        _ClaudeNodeIsProbeable -Name 'marketplace' | Should -BeTrue
+        _ClaudeNodeIsProbeable -Name 'get' | Should -BeTrue
+        _ClaudeNodeIsProbeable -Name 'install' | Should -BeTrue
     }
 
-    It 'never probes a pruned node' {
+    It 'leaves only help nodes unprobed' {
         Get-CompletionText 'claude plugin ' | Out-Null
         $cacheDir = _ClaudeCacheDir
-        Join-Path $cacheDir 'plugin_enable_subcommands' | Should -Not -Exist
-        Join-Path $cacheDir 'plugin_help_subcommands' | Should -Not -Exist
-        Join-Path $cacheDir 'mcp_get_subcommands' | Should -Not -Exist
+        Join-Path $cacheDir 'plugin_help_flags' | Should -Not -Exist
+        Join-Path $cacheDir 'plugin_enable_flags' | Should -Exist
+        Join-Path $cacheDir 'mcp_get_flags' | Should -Exist
     }
 
     It 'does not publish the raw help staging dir' {

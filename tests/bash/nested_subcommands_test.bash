@@ -45,6 +45,24 @@ Commands:
   marketplace                          Manage Claude Code marketplaces
 HELP
         ;;
+    "plugin enable --help")
+        cat << 'HELP'
+Usage: claude plugin enable [options] <plugin>
+
+Options:
+  -h, --help          Display help for command
+  --enable-force      Force enabling the plugin
+HELP
+        ;;
+    "plugin marketplace remove --help")
+        cat << 'HELP'
+Usage: claude plugin marketplace remove [options] <name>
+
+Options:
+  -h, --help          Display help for command
+  --remove-force      Remove without confirmation
+HELP
+        ;;
     "plugin marketplace --help")
         cat << 'HELP'
 Usage: claude plugin marketplace [options] [command]
@@ -86,6 +104,15 @@ Options:
 Commands:
   get <name>                Get server
   list                      List servers
+HELP
+        ;;
+    "mcp get --help")
+        cat << 'HELP'
+Usage: claude mcp get [options] <name>
+
+Options:
+  -h, --help        Display help
+  --get-json        Print the server entry as JSON
 HELP
         ;;
     "deep --help")
@@ -212,33 +239,67 @@ function test_marketplace_update_completes_marketplace_names() {
     assert_contains "claude-plugins-official" "$result"
 }
 
+# --- Flags at a leaf that takes a positional argument -------------------
+
+# Regression: pruning nodes with a required <arg> meant their help was never
+# probed, so their flags were never cached and `claude plugin install -<TAB>`
+# offered nothing at all.
+
+function test_leaf_with_required_arg_completes_its_own_flags() {
+    local result
+    result="$(simulate_completion "claude plugin enable -")"
+    assert_contains "--enable-force" "$result"
+}
+
+function test_leaf_flags_are_its_own_not_its_parents() {
+    local result
+    result="$(simulate_completion "claude plugin enable -")"
+    assert_not_contains "--plugin-scope" "$result"
+}
+
+function test_mcp_leaf_completes_its_own_flags() {
+    local result
+    result="$(simulate_completion "claude mcp get -")"
+    assert_contains "--get-json" "$result"
+}
+
+function test_sub_subcommand_leaf_completes_its_own_flags() {
+    local result
+    result="$(simulate_completion "claude plugin marketplace remove -")"
+    assert_contains "--remove-force" "$result"
+}
+
 # --- Pruning ------------------------------------------------------------
 
-function test_prune_predicate_rejects_help_and_required_args() {
+function test_prune_predicate_rejects_help() {
     # Status is captured explicitly: a bare non-zero return would abort the
     # test under bashunit's set -e harness before the assertion ran.
     local rc
-    rc=0; _claude_node_is_probeable "help" "help [command]" || rc=$?
-    assert_equals "1" "$rc"
-    rc=0; _claude_node_is_probeable "get" "get <name>" || rc=$?
+    rc=0; _claude_node_is_probeable "help" || rc=$?
     assert_equals "1" "$rc"
 }
 
-function test_prune_predicate_accepts_real_groups() {
+function test_prune_predicate_accepts_everything_else() {
+    # Including nodes that take a required argument: they cannot be command
+    # groups, but their help still lists the flags they accept.
     local rc
-    rc=0; _claude_node_is_probeable "marketplace" "marketplace" || rc=$?
+    rc=0; _claude_node_is_probeable "marketplace" || rc=$?
     assert_equals "0" "$rc"
-    rc=0; _claude_node_is_probeable "eval" "eval [options] [target]" || rc=$?
+    rc=0; _claude_node_is_probeable "get" || rc=$?
+    assert_equals "0" "$rc"
+    rc=0; _claude_node_is_probeable "install" || rc=$?
     assert_equals "0" "$rc"
 }
 
-function test_pruned_nodes_are_never_probed() {
+function test_only_help_nodes_are_left_unprobed() {
     local cache_dir
     cache_dir="$(_claude_cache_dir)"
     simulate_completion "claude plugin " > /dev/null
-    assert_file_not_exists "$cache_dir/plugin_enable_subcommands"
-    assert_file_not_exists "$cache_dir/plugin_help_subcommands"
-    assert_file_not_exists "$cache_dir/mcp_get_subcommands"
+    # `help` is the one node never probed ...
+    assert_file_not_exists "$cache_dir/plugin_help_flags"
+    # ... every other node is, so its own flags are cached.
+    assert_file_exists "$cache_dir/plugin_enable_flags"
+    assert_file_exists "$cache_dir/mcp_get_flags"
 }
 
 function test_raw_help_staging_is_not_published_into_the_cache() {
