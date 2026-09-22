@@ -16,7 +16,7 @@ fi
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-_CLAUDE_CACHE_VERSION=10
+_CLAUDE_CACHE_VERSION=11
 
 # Maximum concurrent `claude ... --help` probes during a cache build. Each is
 # a Node cold start, so the per-level fan-out is batched rather than unbounded.
@@ -174,7 +174,7 @@ _claude_version() {
         printf '%s\n' "$_CLAUDE_VERSION_CACHE"
         return
     fi
-    _CLAUDE_VERSION_CACHE="$(claude --version 2>/dev/null | head -1 | awk '{print $1}')"
+    _CLAUDE_VERSION_CACHE="$(claude --version 2>/dev/null </dev/null | head -1 | awk '{print $1}')"
     _CLAUDE_VERSION_KEY="$key"
     printf '%s\n' "$_CLAUDE_VERSION_CACHE"
 }
@@ -381,7 +381,7 @@ _claude_build_cache() {
     raw_dir="$build_dir/.raw"
     mkdir -p "$raw_dir"
 
-    claude --help > "$raw_dir/_root" 2>/dev/null
+    claude --help > "$raw_dir/_root" 2>/dev/null </dev/null
     cp "$raw_dir/_root" "$build_dir/_root_help"
 
     # Walk the command tree one depth at a time, so the nesting we support is
@@ -440,21 +440,46 @@ _claude_build_cache() {
         done
 
         level=()
-        local i launched=0
+        local i
         for (( i=0; i < ${#next_keys[@]}; i++ )); do
-            local -a path_words=()
-            read -ra path_words <<< "${next_paths[i]}"
-            claude "${path_words[@]}" --help > "$raw_dir/${next_keys[i]}" 2>/dev/null &
             level+=( "${next_keys[i]}"$'\t'"${next_paths[i]}" )
-            # Each probe is a Node cold start, so cap the fan-out rather than
-            # launching a whole level at once. Plain `wait` works on every
-            # bash we support; `wait -n` would require 4.3+.
-            launched=$(( launched + 1 ))
-            if (( launched % concurrency == 0 )); then
-                wait
-            fi
         done
-        wait
+
+        # Fetch the level in a subshell, with job control off and the
+        # terminal detached from every probe. Completion runs in the user's
+        # interactive shell, and backgrounding there is hostile to it:
+        #
+        #   * `&` in the interactive shell itself prints `[1] 12345` and
+        #     `Done`/`Stopped` notifications over the line being edited, and
+        #     leaves the probes in that shell's job table. The subshell is
+        #     not interactive, so it reports nothing.
+        #   * With job control on, each probe lands in a background process
+        #     group, and the kernel stops a background process group that
+        #     touches the controlling terminal. `claude` reads terminal modes
+        #     on startup, so every probe stopped before writing a byte — the
+        #     empty raw file read as a failed probe, and the cache published
+        #     with nothing below the root. `set +m` keeps the probes in the
+        #     subshell's own (foreground) group, and </dev/null means they
+        #     have no terminal to touch in the first place.
+        (
+            set +m
+            local -a path_words
+            local launched=0
+            for (( i=0; i < ${#next_keys[@]}; i++ )); do
+                path_words=()
+                read -ra path_words <<< "${next_paths[i]}"
+                claude "${path_words[@]}" --help \
+                    > "$raw_dir/${next_keys[i]}" 2>/dev/null </dev/null &
+                # Each probe is a Node cold start, so cap the fan-out rather
+                # than launching a whole level at once. Plain `wait` works on
+                # every bash we support; `wait -n` would require 4.3+.
+                launched=$(( launched + 1 ))
+                if (( launched % concurrency == 0 )); then
+                    wait
+                fi
+            done
+            wait
+        )
         depth=$(( depth + 1 ))
     done
 
@@ -774,24 +799,24 @@ _claude_complete_flag_arg() {
 _claude_mcp_server_names() {
     # Extract server names from "claude mcp list" output
     # Format: "name: url - status" — extract the first word before the colon
-    claude mcp list 2>/dev/null | grep ':' | grep -v '^Checking\|^$' | sed 's/:.*//' | sed 's/^[[:space:]]*//'
+    claude mcp list 2>/dev/null </dev/null | grep ':' | grep -v '^Checking\|^$' | sed 's/:.*//' | sed 's/^[[:space:]]*//'
 }
 
 _claude_plugin_names() {
     # Extract plugin names from "claude plugin list --json" output
     if command -v jq &>/dev/null; then
-        claude plugin list --json 2>/dev/null | jq -r '.[].name' 2>/dev/null
+        claude plugin list --json 2>/dev/null </dev/null | jq -r '.[].name' 2>/dev/null
     else
-        claude plugin list --json 2>/dev/null | grep -o '"name":"[^"]*"' | sed 's/"name":"//;s/"//'
+        claude plugin list --json 2>/dev/null </dev/null | grep -o '"name":"[^"]*"' | sed 's/"name":"//;s/"//'
     fi
 }
 
 _claude_marketplace_names() {
     # Extract marketplace names from "claude plugin marketplace list --json"
     if command -v jq &>/dev/null; then
-        claude plugin marketplace list --json 2>/dev/null | jq -r '.[].name' 2>/dev/null
+        claude plugin marketplace list --json 2>/dev/null </dev/null | jq -r '.[].name' 2>/dev/null
     else
-        claude plugin marketplace list --json 2>/dev/null | grep -o '"name":"[^"]*"' | sed 's/"name":"//;s/"//'
+        claude plugin marketplace list --json 2>/dev/null </dev/null | grep -o '"name":"[^"]*"' | sed 's/"name":"//;s/"//'
     fi
 }
 
