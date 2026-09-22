@@ -139,7 +139,9 @@ sonnet[1m]
 haiku
 opusplan
 opusplan[1m]
+claude-fable-5-1
 claude-fable-5
+claude-opus-5-5
 claude-opus-5
 claude-opus-4-8
 claude-sonnet-5
@@ -156,6 +158,7 @@ function test_model_family_versions_are_newest_first() {
 opus[1m]
 opusplan
 opusplan[1m]
+claude-opus-5-5
 claude-opus-5
 claude-opus-4-8
 claude-opus-4-7
