@@ -28,7 +28,7 @@ _CLAUDE_PROBE_CONCURRENCY="${_CLAUDE_PROBE_CONCURRENCY:-}"
 # it exists so a pathological help output can never spin the build forever.
 _CLAUDE_MAX_DEPTH=6
 
-# Bundled flags last extended through CHANGELOG version: 2.1.276
+# Bundled flags last extended through CHANGELOG version: 2.1.280
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Format: scope<TAB>name<TAB>takes_arg<TAB>arg_type<TAB>description

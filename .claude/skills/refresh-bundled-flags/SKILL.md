@@ -1,6 +1,6 @@
 ---
 name: refresh-bundled-flags
-description: Use when refreshing the inline bundled-flag list in claude.bash and claude.ps1 from upstream Claude Code CHANGELOG entries. Triggers, "refresh bundled flags", "scan the changelog for new flags", or after a Claude Code release. Updates both completion scripts in lockstep, bumps the cache schema version, and runs the parity test.
+description: Use when refreshing the inline bundled-flag list in claude.bash and claude.ps1 from upstream Claude Code CHANGELOG entries. Triggers, "refresh bundled flags", "scan the changelog for new flags", or after a Claude Code release. Updates both completion scripts in lockstep, bumps the cache schema version when a bundled list changes, and runs the parity test.
 ---
 
 # Refresh Bundled Flags
@@ -86,7 +86,7 @@ The list can't carry every flag that ever existed. The practical horizon is "fla
    - Edit `claude.bash`: insert each new entry into `_CLAUDE_EXTRA_FLAGS` as a `$'scope\tname\ttakes_arg\targ_type\tdescription'` line, or into `_CLAUDE_EXTRA_SUBCOMMANDS` as a `$'name\tdescription'` line.
    - Edit `claude.ps1`: insert each new entry into `$script:ClaudeExtraFlags` or `$script:ClaudeExtraSubcommands` as a `[pscustomobject]@{...}` line.
    - Update both marker comments to the highest CHANGELOG version processed.
-   - Bump both `_CLAUDE_CACHE_VERSION` (bash) and `$script:ClaudeCacheVersion` (PS) by 1.
+   - Bump both `_CLAUDE_CACHE_VERSION` (bash) and `$script:ClaudeCacheVersion` (PS) by 1 — **only when a bundled list's contents change.** The bump exists to discard caches built from the old list; the marker is a comment the cache never reads. So a sweep that finds nothing to add advances the marker alone and leaves the cache version where it is, as the marker-only advances in `faad225`, `dce4492` (#15) and `674e78f` (#23) did.
    - Run the parity test: `./tests/bash/run-tests.sh tests/bash/parity_test.bash`.
    - Run both shell suites: `./tests/bash/run-tests.sh` and `./tests/powershell/Invoke-Tests.ps1`.
 

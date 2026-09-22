@@ -16,7 +16,7 @@ $script:ClaudeProbeConcurrency = $null
 # it exists so a pathological help output can never spin the build forever.
 $script:ClaudeMaxDepth = 6
 
-# Bundled flags last extended through CHANGELOG version: 2.1.276
+# Bundled flags last extended through CHANGELOG version: 2.1.280
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Each entry has fields: Scope, Name, TakesArg, ArgType, Description
