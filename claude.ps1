@@ -4,7 +4,7 @@
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-$script:ClaudeCacheVersion = 10
+$script:ClaudeCacheVersion = 11
 
 # Maximum concurrent `claude ... --help` probes during a cache build. Each is
 # a Node cold start, so the per-level fan-out is batched rather than unbounded.
@@ -87,7 +87,7 @@ function global:_ClaudeVersion {
     if ($script:ClaudeVersionKey -eq $key -and $null -ne $script:ClaudeVersionCache) {
         return $script:ClaudeVersionCache
     }
-    $output = claude --version 2>$null
+    $output = $null | claude --version 2>$null
     $version = if ($output) { ($output -split '\s')[0] }
     $script:ClaudeVersionCache = $version
     $script:ClaudeVersionKey = $key
@@ -202,7 +202,7 @@ function global:_ClaudeBuildCache {
     $rawDir = Join-Path $buildDir '.raw'
     New-Item -ItemType Directory -Path $rawDir -Force | Out-Null
 
-    $rootHelp = claude --help 2>$null
+    $rootHelp = $null | claude --help 2>$null
     Set-Content -Path (Join-Path $rawDir '_root') -Value $rootHelp
     Set-Content -Path (Join-Path $buildDir '_root_help') -Value $rootHelp
 
@@ -265,13 +265,13 @@ function global:_ClaudeBuildCache {
             if ($canParallel) {
                 $next | ForEach-Object -ThrottleLimit $concurrency -Parallel {
                     $words = @($_.Path -split ' ' | Where-Object { $_ })
-                    $out = & claude @words --help 2>$null
+                    $out = $null | & claude @words --help 2>$null
                     Set-Content -Path (Join-Path $using:rawDir $_.Key) -Value $out
                 }
             } else {
                 foreach ($node in $next) {
                     $words = @($node.Path -split ' ' | Where-Object { $_ })
-                    $out = claude @words --help 2>$null
+                    $out = $null | claude @words --help 2>$null
                     Set-Content -Path (Join-Path $rawDir $node.Key) -Value $out
                 }
             }
@@ -674,7 +674,7 @@ function global:_ClaudeCompleteSessions {
 }
 
 function global:_ClaudeMcpServerNames {
-    $output = claude mcp list 2>$null
+    $output = $null | claude mcp list 2>$null
     if (-not $output) { return }
     foreach ($line in ($output -split "`n")) {
         if ($line -match ':' -and $line -notmatch '^Checking|^$') {
@@ -684,7 +684,7 @@ function global:_ClaudeMcpServerNames {
 }
 
 function global:_ClaudePluginNames {
-    $output = claude plugin list --json 2>$null
+    $output = $null | claude plugin list --json 2>$null
     if (-not $output) { return }
     try {
         $plugins = $output | ConvertFrom-Json
@@ -695,7 +695,7 @@ function global:_ClaudePluginNames {
 }
 
 function global:_ClaudeMarketplaceNames {
-    $output = claude plugin marketplace list --json 2>$null
+    $output = $null | claude plugin marketplace list --json 2>$null
     if (-not $output) { return }
     try {
         $marketplaces = $output | ConvertFrom-Json

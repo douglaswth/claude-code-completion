@@ -53,6 +53,8 @@ Tests use [Pester](https://pester.dev/) v5+ in `tests/powershell/`:
 
 Shared test infrastructure lives in `tests/powershell/TestHelper.ps1`.
 
+`TestHelper.ps1`'s `New-MockClaude` installs `claude` as an in-process *function*, which is fast but is not a `CommandType` of `Application`. Any code gated on that — `_ClaudeCanProbeInParallel`, and so the whole `-Parallel` probe branch — is therefore unreachable from a function-mocked test. Tests that need to reach it build a real on-disk mock instead: a `.cmd` on Windows (a `.ps1` will not do, as PowerShell resolves it as `ExternalScript`) and an extensionless script elsewhere. `VersionCache.Tests.ps1` and `TerminalIsolation.Tests.ps1` both do this; prefer an executable mock whenever what is under test depends on `claude` being a real process.
+
 ### Coverage Review
 
 After adding or changing tests in **either** shell, run coverage for **both** shells and walk through each uncovered area one at a time with the user. For each area, show the uncovered line(s) marked with `✗` in context of the surrounding source code, explain why it's uncovered, and categorize it:
