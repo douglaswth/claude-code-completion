@@ -16,7 +16,7 @@ fi
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-_CLAUDE_CACHE_VERSION=11
+_CLAUDE_CACHE_VERSION=12
 
 # Maximum concurrent `claude ... --help` probes during a cache build. Each is
 # a Node cold start, so the per-level fan-out is batched rather than unbounded.
@@ -28,7 +28,7 @@ _CLAUDE_PROBE_CONCURRENCY="${_CLAUDE_PROBE_CONCURRENCY:-}"
 # it exists so a pathological help output can never spin the build forever.
 _CLAUDE_MAX_DEPTH=6
 
-# Bundled flags last extended through CHANGELOG version: 2.1.280
+# Bundled flags last extended through CHANGELOG version: 2.1.321
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Format: scope<TAB>name<TAB>takes_arg<TAB>arg_type<TAB>description
@@ -39,6 +39,7 @@ _CLAUDE_MAX_DEPTH=6
 #   arg_type  — none | file | dir | choice:a,b,c | unknown
 #   description — short text; no embedded tabs
 _CLAUDE_EXTRA_FLAGS=(
+    $'_root\t--advisor\trequired\tunknown\tEnable the server-side advisor tool with the given model'
     $'_root\t--append-subagent-system-prompt\trequired\tunknown\tText appended to the subagent system prompt'
     $'_root\t--append-subagent-system-prompt-file\trequired\tfile\tRead the subagent system prompt from a file'
     $'_root\t--append-system-prompt-file\trequired\tfile\tRead text appended to the system prompt from a file'
@@ -53,10 +54,12 @@ _CLAUDE_EXTRA_FLAGS=(
     $'_root\t--exec\trequired\tunknown\tCommand to execute in a background session (with --bg)'
     $'_root\t--handle-uri\trequired\tunknown\tHandle a URI (used by OS protocol handler registration)'
     $'_root\t--max-thinking-tokens\trequired\tunknown\tMaximum thinking tokens budget'
+    $'_root\t--max-turns\trequired\tunknown\tMaximum agentic turns in non-interactive mode (only with --print)'
     $'_root\t--multi-turn\tnone\tnone\tEnable multi-turn conversation mode'
     $'_root\t--multi-turn-context\trequired\tunknown\tContext for multi-turn mode'
     $'_root\t--multi-turn-model\trequired\tunknown\tModel override for multi-turn mode'
     $'_root\t--no-create-session-in-dir\tnone\tnone\tDo not pre-create a session in the current directory (--remote-control)'
+    $'_root\t--permission-prompt-tool\trequired\tunknown\tMCP tool to use for permission prompts (only works with --print)'
     $'_root\t--plan-mode-instructions\trequired\tunknown\tCustom instructions for plan mode (only with --print)'
     $'_root\t--plan-mode-required\tnone\tnone\tRequire plan mode for the session'
     $'_root\t--remote-control\toptional\tunknown\tConnect local environment to claude.ai/code for remote sessions'
@@ -83,6 +86,8 @@ _CLAUDE_EXTRA_FLAGS=(
 #
 # Format: name<TAB>description
 _CLAUDE_EXTRA_SUBCOMMANDS=(
+    $'daemon\tManage the background session daemon'
+    $'remote-control\tControl local sessions from claude.ai/code or the Claude mobile app'
     $'self-hosted-runner\tRun a self-hosted Claude Code runner'
 )
 
@@ -212,13 +217,20 @@ _claude_cleanup_old_cache() {
 _claude_parse_flags() {
     # Parse flags from help output on stdin
     # Outputs all flag forms (short and long), one per line
+    #
+    # A flag entry sits at the 2-space term column, as a command entry does
+    # in _claude_parse_subcommands. A wrapped description line that happens
+    # to begin with a flag ("--debug=hooks,mcp or", "--plugin-dir A
+    # --plugin-dir B.zip)") is indented to the deep description column; read
+    # as an entry, it listed the flag twice or invented one the command lacks
+    # (`claude plugin --values-stdin`). The other flag parsers use the same
+    # anchor.
     local line
     while IFS= read -r line; do
-        # Match lines starting with optional spaces then a dash
-        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*) ]]; then
+        if [[ "$line" =~ ^[[:space:]]{2}(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*) ]]; then
             echo "${BASH_REMATCH[1]}"
             echo "${BASH_REMATCH[2]}"
-        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*) ]]; then
+        elif [[ "$line" =~ ^[[:space:]]{2}(--[a-zA-Z][-a-zA-Z]*) ]]; then
             echo "${BASH_REMATCH[1]}"
         fi
     done
@@ -231,10 +243,10 @@ _claude_parse_flags_with_args() {
     # which must not be mistaken for an argument.
     local line
     while IFS= read -r line; do
-        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][\<\[] ]]; then
+        if [[ "$line" =~ ^[[:space:]]{2}(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][\<\[] ]]; then
             echo "${BASH_REMATCH[1]}"
             echo "${BASH_REMATCH[2]}"
-        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][\<\[] ]]; then
+        elif [[ "$line" =~ ^[[:space:]]{2}(--[a-zA-Z][-a-zA-Z]*)[[:space:]][\<\[] ]]; then
             echo "${BASH_REMATCH[1]}"
         fi
     done
@@ -246,10 +258,10 @@ _claude_parse_flags_with_optional_args() {
     # beginning with '[' is not mistaken for an optional argument.
     local line
     while IFS= read -r line; do
-        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][[] ]]; then
+        if [[ "$line" =~ ^[[:space:]]{2}(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][[] ]]; then
             echo "${BASH_REMATCH[1]}"
             echo "${BASH_REMATCH[2]}"
-        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][[] ]]; then
+        elif [[ "$line" =~ ^[[:space:]]{2}(--[a-zA-Z][-a-zA-Z]*)[[:space:]][[] ]]; then
             echo "${BASH_REMATCH[1]}"
         fi
     done
@@ -262,7 +274,7 @@ _claude_parse_flag_descriptions() {
     # fnrhombus's PowerShell parser at claude.ps1's _ClaudeParseFlagDescriptions.
     local line short long rest desc
     while IFS= read -r line; do
-        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)(.*)$ ]]; then
+        if [[ "$line" =~ ^[[:space:]]{2}(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)(.*)$ ]]; then
             short="${BASH_REMATCH[1]}"
             long="${BASH_REMATCH[2]}"
             rest="${BASH_REMATCH[3]}"
@@ -271,7 +283,7 @@ _claude_parse_flag_descriptions() {
                 printf '%s\t%s\n' "$short" "$desc"
                 printf '%s\t%s\n' "$long" "$desc"
             fi
-        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)(.*)$ ]]; then
+        elif [[ "$line" =~ ^[[:space:]]{2}(--[a-zA-Z][-a-zA-Z]*)(.*)$ ]]; then
             long="${BASH_REMATCH[1]}"
             rest="${BASH_REMATCH[2]}"
             if [[ "$rest" =~ [[:space:]][[:space:]]+([^[:space:]].*)$ ]]; then
@@ -666,6 +678,7 @@ _CLAUDE_KNOWN_MODELS=(
     sonnet sonnet[1m]
     haiku
     opusplan opusplan[1m]
+    claude-fable-5-2
     claude-fable-5-1
     claude-fable-5
     claude-opus-5-5
@@ -674,9 +687,11 @@ _CLAUDE_KNOWN_MODELS=(
     claude-opus-4-7
     claude-opus-4-6
     claude-opus-4-5-20251101
+    claude-sonnet-5-5
     claude-sonnet-5
     claude-sonnet-4-6
     claude-sonnet-4-5-20250929
+    claude-haiku-5-5
     claude-haiku-4-5-20251001
 )
 

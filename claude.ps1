@@ -4,7 +4,7 @@
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-$script:ClaudeCacheVersion = 11
+$script:ClaudeCacheVersion = 12
 
 # Maximum concurrent `claude ... --help` probes during a cache build. Each is
 # a Node cold start, so the per-level fan-out is batched rather than unbounded.
@@ -16,7 +16,7 @@ $script:ClaudeProbeConcurrency = $null
 # it exists so a pathological help output can never spin the build forever.
 $script:ClaudeMaxDepth = 6
 
-# Bundled flags last extended through CHANGELOG version: 2.1.280
+# Bundled flags last extended through CHANGELOG version: 2.1.321
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Each entry has fields: Scope, Name, TakesArg, ArgType, Description
@@ -37,10 +37,13 @@ $script:ClaudeMaxDepth = 6
 # written, so only the bare name is offered.
 # Keep this list and _CLAUDE_EXTRA_SUBCOMMANDS in claude.bash in sync.
 $script:ClaudeExtraSubcommands = @(
+    [pscustomobject]@{ Name='daemon'; Description='Manage the background session daemon' }
+    [pscustomobject]@{ Name='remote-control'; Description='Control local sessions from claude.ai/code or the Claude mobile app' }
     [pscustomobject]@{ Name='self-hosted-runner'; Description='Run a self-hosted Claude Code runner' }
 )
 
 $script:ClaudeExtraFlags = @(
+    [pscustomobject]@{ Scope='_root'; Name='--advisor'; TakesArg='required'; ArgType='unknown'; Description='Enable the server-side advisor tool with the given model' }
     [pscustomobject]@{ Scope='_root'; Name='--append-subagent-system-prompt'; TakesArg='required'; ArgType='unknown'; Description='Text appended to the subagent system prompt' }
     [pscustomobject]@{ Scope='_root'; Name='--append-subagent-system-prompt-file'; TakesArg='required'; ArgType='file'; Description='Read the subagent system prompt from a file' }
     [pscustomobject]@{ Scope='_root'; Name='--append-system-prompt-file'; TakesArg='required'; ArgType='file'; Description='Read text appended to the system prompt from a file' }
@@ -55,10 +58,12 @@ $script:ClaudeExtraFlags = @(
     [pscustomobject]@{ Scope='_root'; Name='--exec'; TakesArg='required'; ArgType='unknown'; Description='Command to execute in a background session (with --bg)' }
     [pscustomobject]@{ Scope='_root'; Name='--handle-uri'; TakesArg='required'; ArgType='unknown'; Description='Handle a URI (used by OS protocol handler registration)' }
     [pscustomobject]@{ Scope='_root'; Name='--max-thinking-tokens'; TakesArg='required'; ArgType='unknown'; Description='Maximum thinking tokens budget' }
+    [pscustomobject]@{ Scope='_root'; Name='--max-turns'; TakesArg='required'; ArgType='unknown'; Description='Maximum agentic turns in non-interactive mode (only with --print)' }
     [pscustomobject]@{ Scope='_root'; Name='--multi-turn'; TakesArg='none'; ArgType='none'; Description='Enable multi-turn conversation mode' }
     [pscustomobject]@{ Scope='_root'; Name='--multi-turn-context'; TakesArg='required'; ArgType='unknown'; Description='Context for multi-turn mode' }
     [pscustomobject]@{ Scope='_root'; Name='--multi-turn-model'; TakesArg='required'; ArgType='unknown'; Description='Model override for multi-turn mode' }
     [pscustomobject]@{ Scope='_root'; Name='--no-create-session-in-dir'; TakesArg='none'; ArgType='none'; Description='Do not pre-create a session in the current directory (--remote-control)' }
+    [pscustomobject]@{ Scope='_root'; Name='--permission-prompt-tool'; TakesArg='required'; ArgType='unknown'; Description='MCP tool to use for permission prompts (only works with --print)' }
     [pscustomobject]@{ Scope='_root'; Name='--plan-mode-instructions'; TakesArg='required'; ArgType='unknown'; Description='Custom instructions for plan mode (only with --print)' }
     [pscustomobject]@{ Scope='_root'; Name='--plan-mode-required'; TakesArg='none'; ArgType='none'; Description='Require plan mode for the session' }
     [pscustomobject]@{ Scope='_root'; Name='--remote-control'; TakesArg='optional'; ArgType='unknown'; Description='Connect local environment to claude.ai/code for remote sessions' }
@@ -310,12 +315,19 @@ function global:_ClaudeBuildCache {
 }
 
 function global:_ClaudeParseFlags {
+    # A flag entry sits at the 2-space term column, as a command entry does in
+    # _ClaudeParseSubcommands. A wrapped description line that happens to begin
+    # with a flag ("--debug=hooks,mcp or", "--plugin-dir A --plugin-dir B.zip)")
+    # is indented to the deep description column; read as an entry, it listed
+    # the flag twice or invented one the command lacks
+    # (`claude plugin --values-stdin`). The other flag parsers use the same
+    # anchor.
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
-        if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)') {
+        if ($line -match '^\s{2}(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)') {
             $Matches[1]
             $Matches[2]
-        } elseif ($line -match '^\s+(--[a-zA-Z][-a-zA-Z]*)') {
+        } elseif ($line -match '^\s{2}(--[a-zA-Z][-a-zA-Z]*)') {
             $Matches[1]
         }
     }
@@ -328,10 +340,10 @@ function global:_ClaudeParseFlagsWithArgs {
     # not be mistaken for an argument.
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
-        if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s[<\[]') {
+        if ($line -match '^\s{2}(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s[<\[]') {
             $Matches[1]
             $Matches[2]
-        } elseif ($line -match '^\s+(--[a-zA-Z][-a-zA-Z]*)\s[<\[]') {
+        } elseif ($line -match '^\s{2}(--[a-zA-Z][-a-zA-Z]*)\s[<\[]') {
             $Matches[1]
         }
     }
@@ -343,10 +355,10 @@ function global:_ClaudeParseFlagsWithOptionalArgs {
     # with '[' is not mistaken for an optional argument.
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
-        if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s\[') {
+        if ($line -match '^\s{2}(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s\[') {
             $Matches[1]
             $Matches[2]
-        } elseif ($line -match '^\s+(--[a-zA-Z][-a-zA-Z]*)\s\[') {
+        } elseif ($line -match '^\s{2}(--[a-zA-Z][-a-zA-Z]*)\s\[') {
             $Matches[1]
         }
     }
@@ -425,11 +437,11 @@ function global:_ClaudeCompletionsWithTooltips {
 function global:_ClaudeParseFlagDescriptions {
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
-        if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s+.*?\s{2,}(\S.+)') {
+        if ($line -match '^\s{2}(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s+.*?\s{2,}(\S.+)') {
             $desc = $Matches[3].TrimEnd()
             "$($Matches[1])`t$desc"
             "$($Matches[2])`t$desc"
-        } elseif ($line -match '^\s+(--[a-zA-Z][-a-zA-Z]*).*?\s{2,}(\S.+)') {
+        } elseif ($line -match '^\s{2}(--[a-zA-Z][-a-zA-Z]*).*?\s{2,}(\S.+)') {
             "$($Matches[1])`t$($Matches[2].TrimEnd())"
         }
     }
@@ -450,6 +462,7 @@ $script:_ClaudeKnownModels = @(
     'sonnet', 'sonnet[1m]',
     'haiku',
     'opusplan', 'opusplan[1m]',
+    'claude-fable-5-2',
     'claude-fable-5-1',
     'claude-fable-5',
     'claude-opus-5-5',
@@ -458,9 +471,11 @@ $script:_ClaudeKnownModels = @(
     'claude-opus-4-7',
     'claude-opus-4-6',
     'claude-opus-4-5-20251101',
+    'claude-sonnet-5-5',
     'claude-sonnet-5',
     'claude-sonnet-4-6',
     'claude-sonnet-4-5-20250929',
+    'claude-haiku-5-5',
     'claude-haiku-4-5-20251001'
 )
 
