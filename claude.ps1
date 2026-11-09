@@ -63,6 +63,7 @@ $script:ClaudeExtraFlags = @(
     [pscustomobject]@{ Scope='_root'; Name='--multi-turn-context'; TakesArg='required'; ArgType='unknown'; Description='Context for multi-turn mode' }
     [pscustomobject]@{ Scope='_root'; Name='--multi-turn-model'; TakesArg='required'; ArgType='unknown'; Description='Model override for multi-turn mode' }
     [pscustomobject]@{ Scope='_root'; Name='--no-create-session-in-dir'; TakesArg='none'; ArgType='none'; Description='Do not pre-create a session in the current directory (--remote-control)' }
+    [pscustomobject]@{ Scope='_root'; Name='--permission-prompt-tool'; TakesArg='required'; ArgType='unknown'; Description='MCP tool to use for permission prompts (only works with --print)' }
     [pscustomobject]@{ Scope='_root'; Name='--plan-mode-instructions'; TakesArg='required'; ArgType='unknown'; Description='Custom instructions for plan mode (only with --print)' }
     [pscustomobject]@{ Scope='_root'; Name='--plan-mode-required'; TakesArg='none'; ArgType='none'; Description='Require plan mode for the session' }
     [pscustomobject]@{ Scope='_root'; Name='--remote-control'; TakesArg='optional'; ArgType='unknown'; Description='Connect local environment to claude.ai/code for remote sessions' }

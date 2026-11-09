@@ -59,6 +59,7 @@ _CLAUDE_EXTRA_FLAGS=(
     $'_root\t--multi-turn-context\trequired\tunknown\tContext for multi-turn mode'
     $'_root\t--multi-turn-model\trequired\tunknown\tModel override for multi-turn mode'
     $'_root\t--no-create-session-in-dir\tnone\tnone\tDo not pre-create a session in the current directory (--remote-control)'
+    $'_root\t--permission-prompt-tool\trequired\tunknown\tMCP tool to use for permission prompts (only works with --print)'
     $'_root\t--plan-mode-instructions\trequired\tunknown\tCustom instructions for plan mode (only with --print)'
     $'_root\t--plan-mode-required\tnone\tnone\tRequire plan mode for the session'
     $'_root\t--remote-control\toptional\tunknown\tConnect local environment to claude.ai/code for remote sessions'
