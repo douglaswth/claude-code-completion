@@ -16,7 +16,7 @@ fi
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-_CLAUDE_CACHE_VERSION=11
+_CLAUDE_CACHE_VERSION=12
 
 # Maximum concurrent `claude ... --help` probes during a cache build. Each is
 # a Node cold start, so the per-level fan-out is batched rather than unbounded.
@@ -28,7 +28,7 @@ _CLAUDE_PROBE_CONCURRENCY="${_CLAUDE_PROBE_CONCURRENCY:-}"
 # it exists so a pathological help output can never spin the build forever.
 _CLAUDE_MAX_DEPTH=6
 
-# Bundled flags last extended through CHANGELOG version: 2.1.280
+# Bundled flags last extended through CHANGELOG version: 2.1.321
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Format: scope<TAB>name<TAB>takes_arg<TAB>arg_type<TAB>description
@@ -39,6 +39,7 @@ _CLAUDE_MAX_DEPTH=6
 #   arg_type  — none | file | dir | choice:a,b,c | unknown
 #   description — short text; no embedded tabs
 _CLAUDE_EXTRA_FLAGS=(
+    $'_root\t--advisor\trequired\tunknown\tEnable the server-side advisor tool with the given model'
     $'_root\t--append-subagent-system-prompt\trequired\tunknown\tText appended to the subagent system prompt'
     $'_root\t--append-subagent-system-prompt-file\trequired\tfile\tRead the subagent system prompt from a file'
     $'_root\t--append-system-prompt-file\trequired\tfile\tRead text appended to the system prompt from a file'
@@ -53,6 +54,7 @@ _CLAUDE_EXTRA_FLAGS=(
     $'_root\t--exec\trequired\tunknown\tCommand to execute in a background session (with --bg)'
     $'_root\t--handle-uri\trequired\tunknown\tHandle a URI (used by OS protocol handler registration)'
     $'_root\t--max-thinking-tokens\trequired\tunknown\tMaximum thinking tokens budget'
+    $'_root\t--max-turns\trequired\tunknown\tMaximum agentic turns in non-interactive mode (only with --print)'
     $'_root\t--multi-turn\tnone\tnone\tEnable multi-turn conversation mode'
     $'_root\t--multi-turn-context\trequired\tunknown\tContext for multi-turn mode'
     $'_root\t--multi-turn-model\trequired\tunknown\tModel override for multi-turn mode'
@@ -83,6 +85,8 @@ _CLAUDE_EXTRA_FLAGS=(
 #
 # Format: name<TAB>description
 _CLAUDE_EXTRA_SUBCOMMANDS=(
+    $'daemon\tManage the background session daemon'
+    $'remote-control\tControl local sessions from claude.ai/code or the Claude mobile app'
     $'self-hosted-runner\tRun a self-hosted Claude Code runner'
 )
 

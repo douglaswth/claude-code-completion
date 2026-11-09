@@ -4,7 +4,7 @@
 # Cache schema version. Bump on any change to bundled-flag data, sidecar
 # file format, or cache layout. Bumps invalidate existing caches for the
 # same CLI version.
-$script:ClaudeCacheVersion = 11
+$script:ClaudeCacheVersion = 12
 
 # Maximum concurrent `claude ... --help` probes during a cache build. Each is
 # a Node cold start, so the per-level fan-out is batched rather than unbounded.
@@ -16,7 +16,7 @@ $script:ClaudeProbeConcurrency = $null
 # it exists so a pathological help output can never spin the build forever.
 $script:ClaudeMaxDepth = 6
 
-# Bundled flags last extended through CHANGELOG version: 2.1.280
+# Bundled flags last extended through CHANGELOG version: 2.1.321
 # (The skill at .claude/skills/refresh-bundled-flags/ updates this marker.)
 #
 # Each entry has fields: Scope, Name, TakesArg, ArgType, Description
@@ -37,10 +37,13 @@ $script:ClaudeMaxDepth = 6
 # written, so only the bare name is offered.
 # Keep this list and _CLAUDE_EXTRA_SUBCOMMANDS in claude.bash in sync.
 $script:ClaudeExtraSubcommands = @(
+    [pscustomobject]@{ Name='daemon'; Description='Manage the background session daemon' }
+    [pscustomobject]@{ Name='remote-control'; Description='Control local sessions from claude.ai/code or the Claude mobile app' }
     [pscustomobject]@{ Name='self-hosted-runner'; Description='Run a self-hosted Claude Code runner' }
 )
 
 $script:ClaudeExtraFlags = @(
+    [pscustomobject]@{ Scope='_root'; Name='--advisor'; TakesArg='required'; ArgType='unknown'; Description='Enable the server-side advisor tool with the given model' }
     [pscustomobject]@{ Scope='_root'; Name='--append-subagent-system-prompt'; TakesArg='required'; ArgType='unknown'; Description='Text appended to the subagent system prompt' }
     [pscustomobject]@{ Scope='_root'; Name='--append-subagent-system-prompt-file'; TakesArg='required'; ArgType='file'; Description='Read the subagent system prompt from a file' }
     [pscustomobject]@{ Scope='_root'; Name='--append-system-prompt-file'; TakesArg='required'; ArgType='file'; Description='Read text appended to the system prompt from a file' }
@@ -55,6 +58,7 @@ $script:ClaudeExtraFlags = @(
     [pscustomobject]@{ Scope='_root'; Name='--exec'; TakesArg='required'; ArgType='unknown'; Description='Command to execute in a background session (with --bg)' }
     [pscustomobject]@{ Scope='_root'; Name='--handle-uri'; TakesArg='required'; ArgType='unknown'; Description='Handle a URI (used by OS protocol handler registration)' }
     [pscustomobject]@{ Scope='_root'; Name='--max-thinking-tokens'; TakesArg='required'; ArgType='unknown'; Description='Maximum thinking tokens budget' }
+    [pscustomobject]@{ Scope='_root'; Name='--max-turns'; TakesArg='required'; ArgType='unknown'; Description='Maximum agentic turns in non-interactive mode (only with --print)' }
     [pscustomobject]@{ Scope='_root'; Name='--multi-turn'; TakesArg='none'; ArgType='none'; Description='Enable multi-turn conversation mode' }
     [pscustomobject]@{ Scope='_root'; Name='--multi-turn-context'; TakesArg='required'; ArgType='unknown'; Description='Context for multi-turn mode' }
     [pscustomobject]@{ Scope='_root'; Name='--multi-turn-model'; TakesArg='required'; ArgType='unknown'; Description='Model override for multi-turn mode' }
