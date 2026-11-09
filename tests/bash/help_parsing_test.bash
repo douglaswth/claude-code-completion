@@ -22,6 +22,11 @@ Options:
   -r, --resume [value]           Resume a conversation by session ID
   --from-pr [value]              Resume a session linked to a PR
   --mcp-debug                    [DEPRECATED. Use --debug instead] MCP debug
+  -d, --debug [filter]           Enable debug mode (e.g.
+                                 --debug=api,hooks)
+  --tmux                         Create a tmux session (use
+                                 --from-pr [n] to pick one, or
+                                 --tmux=classic)
   -h, --help                     Display help
   -v, --version                  Output the version number
 
@@ -77,6 +82,8 @@ Options:
   -h, --help                           Display help
 
 Commands:
+  configure [options] <plugin>         Save a plugin's options with
+                                       --values-stdin
   disable [options] [plugin]           Disable a plugin
   enable [options] <plugin>            Enable a plugin
   install|i [options] <plugin>         Install a plugin
@@ -166,6 +173,29 @@ function test_optional_args_excludes_required_arg_model() {
 
 function test_optional_args_excludes_bracket_description_flag() {
     assert_file_not_contains "$CACHE_DIR/_root_flags_with_optional_args" "--mcp-debug"
+}
+
+function test_flag_files_list_each_flag_once_despite_wrapped_descriptions() {
+    # A wrapped description line that begins with a flag ("--debug=api,hooks)",
+    # "--from-pr [n] to pick one, or", "--tmux=classic)") sits at the deep
+    # description column. It is prose, not a second entry for that flag.
+    local file
+    for file in _root_flags _root_flags_with_args _root_flags_with_optional_args; do
+        assert_empty "$(sort "$CACHE_DIR/$file" | uniq -d)"
+    done
+    assert_empty "$(cut -f1 "$CACHE_DIR/_root_flag_descriptions" | sort | uniq -d)"
+}
+
+function test_wrapped_description_lines_keep_the_real_entries() {
+    assert_equals "--debug" "$(grep -x -- '--debug' "$CACHE_DIR/_root_flags")"
+    assert_equals "--tmux" "$(grep -x -- '--tmux' "$CACHE_DIR/_root_flags")"
+    assert_file_contains "$CACHE_DIR/_root_flags_with_optional_args" "--debug"
+}
+
+function test_flag_named_in_wrapped_command_description_is_not_a_flag() {
+    # "configure ...  Save a plugin's options with\n  --values-stdin" names
+    # configure's flag in prose; `claude plugin` itself has no --values-stdin.
+    assert_file_not_contains "$CACHE_DIR/plugin_flags" "--values-stdin"
 }
 
 function test_root_subcommands_contains_doctor() {

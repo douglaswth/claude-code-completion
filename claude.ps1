@@ -315,12 +315,19 @@ function global:_ClaudeBuildCache {
 }
 
 function global:_ClaudeParseFlags {
+    # A flag entry sits at the 2-space term column, as a command entry does in
+    # _ClaudeParseSubcommands. A wrapped description line that happens to begin
+    # with a flag ("--debug=hooks,mcp or", "--plugin-dir A --plugin-dir B.zip)")
+    # is indented to the deep description column; read as an entry, it listed
+    # the flag twice or invented one the command lacks
+    # (`claude plugin --values-stdin`). The other flag parsers use the same
+    # anchor.
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
-        if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)') {
+        if ($line -match '^\s{2}(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)') {
             $Matches[1]
             $Matches[2]
-        } elseif ($line -match '^\s+(--[a-zA-Z][-a-zA-Z]*)') {
+        } elseif ($line -match '^\s{2}(--[a-zA-Z][-a-zA-Z]*)') {
             $Matches[1]
         }
     }
@@ -333,10 +340,10 @@ function global:_ClaudeParseFlagsWithArgs {
     # not be mistaken for an argument.
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
-        if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s[<\[]') {
+        if ($line -match '^\s{2}(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s[<\[]') {
             $Matches[1]
             $Matches[2]
-        } elseif ($line -match '^\s+(--[a-zA-Z][-a-zA-Z]*)\s[<\[]') {
+        } elseif ($line -match '^\s{2}(--[a-zA-Z][-a-zA-Z]*)\s[<\[]') {
             $Matches[1]
         }
     }
@@ -348,10 +355,10 @@ function global:_ClaudeParseFlagsWithOptionalArgs {
     # with '[' is not mistaken for an optional argument.
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
-        if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s\[') {
+        if ($line -match '^\s{2}(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s\[') {
             $Matches[1]
             $Matches[2]
-        } elseif ($line -match '^\s+(--[a-zA-Z][-a-zA-Z]*)\s\[') {
+        } elseif ($line -match '^\s{2}(--[a-zA-Z][-a-zA-Z]*)\s\[') {
             $Matches[1]
         }
     }
@@ -430,11 +437,11 @@ function global:_ClaudeCompletionsWithTooltips {
 function global:_ClaudeParseFlagDescriptions {
     param([string[]]$HelpLines)
     foreach ($line in $HelpLines) {
-        if ($line -match '^\s+(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s+.*?\s{2,}(\S.+)') {
+        if ($line -match '^\s{2}(-[a-zA-Z]),?\s+(--[a-zA-Z][-a-zA-Z]*)\s+.*?\s{2,}(\S.+)') {
             $desc = $Matches[3].TrimEnd()
             "$($Matches[1])`t$desc"
             "$($Matches[2])`t$desc"
-        } elseif ($line -match '^\s+(--[a-zA-Z][-a-zA-Z]*).*?\s{2,}(\S.+)') {
+        } elseif ($line -match '^\s{2}(--[a-zA-Z][-a-zA-Z]*).*?\s{2,}(\S.+)') {
             "$($Matches[1])`t$($Matches[2].TrimEnd())"
         }
     }

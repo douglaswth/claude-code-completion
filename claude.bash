@@ -217,13 +217,20 @@ _claude_cleanup_old_cache() {
 _claude_parse_flags() {
     # Parse flags from help output on stdin
     # Outputs all flag forms (short and long), one per line
+    #
+    # A flag entry sits at the 2-space term column, as a command entry does
+    # in _claude_parse_subcommands. A wrapped description line that happens
+    # to begin with a flag ("--debug=hooks,mcp or", "--plugin-dir A
+    # --plugin-dir B.zip)") is indented to the deep description column; read
+    # as an entry, it listed the flag twice or invented one the command lacks
+    # (`claude plugin --values-stdin`). The other flag parsers use the same
+    # anchor.
     local line
     while IFS= read -r line; do
-        # Match lines starting with optional spaces then a dash
-        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*) ]]; then
+        if [[ "$line" =~ ^[[:space:]]{2}(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*) ]]; then
             echo "${BASH_REMATCH[1]}"
             echo "${BASH_REMATCH[2]}"
-        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*) ]]; then
+        elif [[ "$line" =~ ^[[:space:]]{2}(--[a-zA-Z][-a-zA-Z]*) ]]; then
             echo "${BASH_REMATCH[1]}"
         fi
     done
@@ -236,10 +243,10 @@ _claude_parse_flags_with_args() {
     # which must not be mistaken for an argument.
     local line
     while IFS= read -r line; do
-        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][\<\[] ]]; then
+        if [[ "$line" =~ ^[[:space:]]{2}(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][\<\[] ]]; then
             echo "${BASH_REMATCH[1]}"
             echo "${BASH_REMATCH[2]}"
-        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][\<\[] ]]; then
+        elif [[ "$line" =~ ^[[:space:]]{2}(--[a-zA-Z][-a-zA-Z]*)[[:space:]][\<\[] ]]; then
             echo "${BASH_REMATCH[1]}"
         fi
     done
@@ -251,10 +258,10 @@ _claude_parse_flags_with_optional_args() {
     # beginning with '[' is not mistaken for an optional argument.
     local line
     while IFS= read -r line; do
-        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][[] ]]; then
+        if [[ "$line" =~ ^[[:space:]]{2}(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][[] ]]; then
             echo "${BASH_REMATCH[1]}"
             echo "${BASH_REMATCH[2]}"
-        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)[[:space:]][[] ]]; then
+        elif [[ "$line" =~ ^[[:space:]]{2}(--[a-zA-Z][-a-zA-Z]*)[[:space:]][[] ]]; then
             echo "${BASH_REMATCH[1]}"
         fi
     done
@@ -267,7 +274,7 @@ _claude_parse_flag_descriptions() {
     # fnrhombus's PowerShell parser at claude.ps1's _ClaudeParseFlagDescriptions.
     local line short long rest desc
     while IFS= read -r line; do
-        if [[ "$line" =~ ^[[:space:]]+(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)(.*)$ ]]; then
+        if [[ "$line" =~ ^[[:space:]]{2}(-[a-zA-Z]),?[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)(.*)$ ]]; then
             short="${BASH_REMATCH[1]}"
             long="${BASH_REMATCH[2]}"
             rest="${BASH_REMATCH[3]}"
@@ -276,7 +283,7 @@ _claude_parse_flag_descriptions() {
                 printf '%s\t%s\n' "$short" "$desc"
                 printf '%s\t%s\n' "$long" "$desc"
             fi
-        elif [[ "$line" =~ ^[[:space:]]+(--[a-zA-Z][-a-zA-Z]*)(.*)$ ]]; then
+        elif [[ "$line" =~ ^[[:space:]]{2}(--[a-zA-Z][-a-zA-Z]*)(.*)$ ]]; then
             long="${BASH_REMATCH[1]}"
             rest="${BASH_REMATCH[2]}"
             if [[ "$rest" =~ [[:space:]][[:space:]]+([^[:space:]].*)$ ]]; then

@@ -19,11 +19,18 @@ Options:
   -r, --resume [value]           Resume a conversation by session ID
   --from-pr [value]              Resume a session linked to a PR
   --mcp-debug                    [DEPRECATED. Use --debug instead] MCP debug
+  -d, --debug [filter]           Enable debug mode (e.g.
+                                 --debug=api,hooks)
+  --tmux                         Create a tmux session (use
+                                 --from-pr [n] to pick one, or
+                                 --tmux=classic)
   -h, --help                     Display help
   -v, --version                  Output the version number
 
 Commands:
   auth                           Manage authentication
+  configure [options] <plugin>   Save a plugin's options with
+                                 --values-stdin
   doctor                         Check the health of your Claude Code
                                  auto-updater. The workspace trust dialog is
                                  skipped for health checks.
@@ -137,6 +144,36 @@ Commands:
             $crlfLines = $crlfHelp -split "`n"
             $crlfDescriptions = @(_ClaudeParseFlagDescriptions -HelpLines $crlfLines)
             $crlfDescriptions | Should -Contain "--crlf-flag`tDescription with CRLF"
+        }
+    }
+
+    Context 'wrapped description lines that begin with a flag' {
+        # "--debug=api,hooks)", "--from-pr [n] to pick one, or" and
+        # "--tmux=classic)" sit at the deep description column. They are prose,
+        # not further entries for those flags.
+        It 'lists each flag once in every flag parser' {
+            @(_ClaudeParseFlags -HelpLines $helpLines | Group-Object | Where-Object Count -gt 1) |
+                Should -BeNullOrEmpty
+            @(_ClaudeParseFlagsWithArgs -HelpLines $helpLines | Group-Object | Where-Object Count -gt 1) |
+                Should -BeNullOrEmpty
+            @(_ClaudeParseFlagsWithOptionalArgs -HelpLines $helpLines | Group-Object | Where-Object Count -gt 1) |
+                Should -BeNullOrEmpty
+            @(_ClaudeParseFlagDescriptions -HelpLines $helpLines |
+                ForEach-Object { ($_ -split "`t", 2)[0] } | Group-Object | Where-Object Count -gt 1) |
+                Should -BeNullOrEmpty
+        }
+
+        It 'keeps the real entries' {
+            $flags = @(_ClaudeParseFlags -HelpLines $helpLines)
+            $flags | Should -Contain '--debug'
+            $flags | Should -Contain '--tmux'
+            @(_ClaudeParseFlagsWithOptionalArgs -HelpLines $helpLines) | Should -Contain '--debug'
+        }
+
+        It 'does not take a flag named in a wrapped command description' {
+            # configure's description names its own --values-stdin; the command
+            # whose help this is has no such flag.
+            @(_ClaudeParseFlags -HelpLines $helpLines) | Should -Not -Contain '--values-stdin'
         }
     }
 
