@@ -450,6 +450,7 @@ $script:_ClaudeKnownModels = @(
     'sonnet', 'sonnet[1m]',
     'haiku',
     'opusplan', 'opusplan[1m]',
+    'claude-fable-5-2',
     'claude-fable-5-1',
     'claude-fable-5',
     'claude-opus-5-5',
@@ -458,9 +459,11 @@ $script:_ClaudeKnownModels = @(
     'claude-opus-4-7',
     'claude-opus-4-6',
     'claude-opus-4-5-20251101',
+    'claude-sonnet-5-5',
     'claude-sonnet-5',
     'claude-sonnet-4-6',
     'claude-sonnet-4-5-20250929',
+    'claude-haiku-5-5',
     'claude-haiku-4-5-20251001'
 )
 
